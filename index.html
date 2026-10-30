@@ -1,0 +1,1211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2564cf">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Odmit</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+:root{--blue:#2564cf;--blue-d:#1a4fa8;--blue-l:#eff6fc;--bg:#faf9f8;--side:#ffffff;--line:#edebe9;--txt:#323130;--sub:#605e5c;--red:#a4262c;--row:#fff;--sel:#deecf9;--shadow:0 .3px .9px rgba(0,0,0,.1),0 1.6px 3.6px rgba(0,0,0,.13)}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;font-family:"Segoe UI","Segoe UI Web",-apple-system,BlinkMacSystemFont,Roboto,"Helvetica Neue",Arial,sans-serif;color:var(--txt);font-size:14px;background:var(--bg);-webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
+input,textarea,select{font:inherit;color:inherit}
+svg{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.hidden{display:none!important}
+#app{height:100%;display:flex;flex-direction:column}
+#app>#shell{flex:1;min-height:0}
+/* top bar */
+#topbar{flex:none;height:48px;background:var(--blue);color:#fff;display:flex;align-items:center;gap:8px;padding:0 8px 0 4px;position:relative;z-index:30;padding-top:env(safe-area-inset-top);box-sizing:content-box}
+#topbar .brand{font-weight:600;font-size:16px;padding:0 8px;white-space:nowrap}
+.tb-btn{width:40px;height:40px;display:flex;align-items:center;justify-content:center;border-radius:4px}
+.tb-btn:hover{background:rgba(255,255,255,.15)}
+#searchWrap{flex:1;max-width:400px;margin:0 auto;display:flex;align-items:center;background:#fff;color:var(--txt);border-radius:4px;height:32px;padding:0 8px;gap:6px}
+#searchWrap svg{color:var(--blue);width:18px}
+#search{border:0;outline:0;flex:1;min-width:0;background:transparent}
+#syncChip{font-size:12px;display:flex;align-items:center;gap:4px;opacity:.95;white-space:nowrap;padding:0 6px}
+#syncChip .dot{width:8px;height:8px;border-radius:50%;background:#92c353}
+#syncChip.off .dot{background:#ffaa44}#syncChip.err .dot{background:#ff6b6b}#syncChip.busy .dot{background:#fff;animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.3}}
+.avatar{width:32px;height:32px;border-radius:50%;background:#c7e0f4;color:var(--blue-d);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:12px;flex:none}
+.avatar.sm{width:24px;height:24px;font-size:10px}
+#topbar .avatar{background:#fff}
+/* layout */
+#shell{display:flex}
+#sidebar{width:290px;background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column;flex:none;transition:transform .2s}
+#navScroll{flex:1;overflow-y:auto;padding:8px 0}
+.nav-item{display:flex;align-items:center;gap:14px;padding:0 16px 0 20px;height:40px;cursor:pointer;position:relative;user-select:none;-webkit-user-select:none}
+.nav-item:hover{background:#f3f2f1}
+.nav-item.active{background:var(--sel);font-weight:600}
+.nav-item.active::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:3px;background:var(--blue);border-radius:2px}
+.nav-item .name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nav-item .count{font-size:12px;color:var(--sub);font-weight:400}
+.nav-item svg{color:var(--blue)}
+.nav-item .shared-ic{color:var(--sub);width:16px}
+.nav-sep{height:1px;background:var(--line);margin:8px 16px}
+.nav-group{display:flex;align-items:center;gap:10px;padding:0 16px 0 20px;height:36px;cursor:pointer;color:var(--sub);font-weight:600;user-select:none}
+.nav-group:hover{background:#f3f2f1}
+.nav-group .chev{width:14px;transition:transform .15s}
+.nav-group.collapsed .chev{transform:rotate(-90deg)}
+.nav-group .name{flex:1}
+.nav-group-items .nav-item{padding-left:36px}
+.drop-before{box-shadow:inset 0 2px 0 var(--blue)}
+.drop-into{background:var(--sel)!important;outline:2px solid var(--blue);outline-offset:-2px}
+#navFooter{display:flex;border-top:1px solid var(--line);height:48px;align-items:center}
+#navFooter button{display:flex;align-items:center;gap:12px;color:var(--blue);padding:0 20px;height:100%;flex:1;text-align:left}
+#navFooter button:hover{background:#f3f2f1}
+#navFooter .ng{flex:none;padding:0 14px}
+#main{flex:1;display:flex;flex-direction:column;min-width:0;position:relative}
+#mainHead{padding:16px 24px 8px;display:flex;align-items:flex-start;gap:8px}
+#mainHead .titles{flex:1;min-width:0}
+#viewTitle{font-size:20px;font-weight:600;color:var(--blue);border:0;background:transparent;outline:0;width:100%;padding:2px 4px;margin-left:-4px;border-radius:4px;text-overflow:ellipsis}
+#viewTitle:not([readonly]):hover{background:#fff}
+#viewTitle:not([readonly]):focus{background:#fff;box-shadow:0 0 0 1px var(--line)}
+#viewSub{font-size:12px;color:var(--sub);margin-top:2px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:4px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:1px 8px;font-size:12px;color:var(--sub)}
+.chip svg{width:14px}
+.head-btn{display:flex;align-items:center;gap:6px;height:32px;padding:0 8px;border-radius:4px;color:var(--sub);white-space:nowrap}
+.head-btn:hover{background:#fff;color:var(--blue)}
+.head-btn svg{width:18px}
+#menuBtn{display:none}
+#addBox{margin:4px 24px 8px;background:#fff;box-shadow:var(--shadow);border-radius:4px;display:flex;align-items:center;gap:12px;padding:0 12px;height:52px}
+#addBox svg{color:var(--blue)}
+#addInput{border:0;outline:0;flex:1;min-width:0;background:transparent;font-size:14px}
+#addInput::placeholder{color:var(--blue)}
+#addInput:focus::placeholder{color:var(--sub)}
+#addBtn{color:var(--blue);font-weight:600;padding:6px 10px;border-radius:4px}
+#addBtn:hover{background:var(--blue-l)}
+#taskArea{flex:1;overflow-y:auto;padding:0 24px 80px}
+.sec-head{display:flex;align-items:center;gap:8px;margin:14px 0 6px;font-weight:600;cursor:pointer;user-select:none;font-size:14px}
+.sec-head .chev{width:16px;transition:transform .15s}
+.sec-head.collapsed .chev{transform:rotate(-90deg)}
+.sec-head .cnt{color:var(--sub);font-weight:400}
+.sec-head.overdue{color:var(--red)}
+.task{display:flex;align-items:center;gap:12px;background:var(--row);box-shadow:var(--shadow);border-radius:4px;min-height:52px;padding:6px 12px;margin-bottom:2px;cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:pan-y}
+.task:hover{background:#f5f5f5}
+.task.selected{background:var(--sel)}
+.task .body{flex:1;min-width:0}
+.task .title{overflow:hidden;text-overflow:ellipsis;word-break:break-word}
+.task.done .title{text-decoration:line-through;color:var(--sub)}
+.meta{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px;color:var(--sub);margin-top:2px;align-items:center}
+.meta span{display:inline-flex;align-items:center;gap:3px}
+.meta svg{width:13px;height:13px}
+.meta .od{color:var(--red)}.meta .td{color:var(--blue)}
+.circle{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--blue);display:flex;align-items:center;justify-content:center;flex:none;color:var(--blue)}
+.circle svg{width:12px;height:12px;stroke-width:2.6;opacity:0}
+.circle:hover svg{opacity:.7}
+.circle.on{background:var(--blue);color:#fff}.circle.on svg{opacity:1}
+.star{color:var(--blue);display:flex;padding:4px}
+.star.on svg{fill:var(--blue)}
+.empty{text-align:center;color:var(--sub);margin-top:60px}
+.empty svg{width:64px;height:64px;color:#c8c6c4;stroke-width:1}
+/* detail pane */
+#detail{width:360px;background:#f3f2f1;border-left:1px solid var(--line);display:flex;flex-direction:column;flex:none}
+#detailScroll{flex:1;overflow-y:auto;padding:12px 16px 16px}
+.d-card{background:#fff;border-radius:4px;border:1px solid var(--line);margin-bottom:8px}
+.d-title{display:flex;align-items:flex-start;gap:12px;padding:14px 12px 8px}
+.d-title .circle{margin-top:4px}
+#dTitle{flex:1;border:0;outline:0;resize:none;font-size:18px;font-weight:600;background:transparent;min-height:28px;overflow:hidden;padding:0;line-height:1.4}
+.d-title .star{margin-top:2px}
+.step{display:flex;align-items:center;gap:12px;padding:6px 12px;border-top:1px solid transparent}
+.step .circle{width:16px;height:16px}.step .circle svg{width:10px;height:10px}
+.step input{flex:1;border:0;outline:0;background:transparent;padding:4px 0;min-width:0}
+.step.done input{text-decoration:line-through;color:var(--sub)}
+.step .x{opacity:.0;color:var(--sub)}.step:hover .x{opacity:1}
+.add-step{display:flex;align-items:center;gap:12px;padding:8px 12px 12px;color:var(--blue)}
+.add-step input{flex:1;border:0;outline:0;background:transparent;min-width:0}
+.add-step input::placeholder{color:var(--blue)}
+.d-row{display:flex;align-items:center;gap:14px;padding:0 12px;min-height:50px;cursor:pointer;color:var(--sub);position:relative}
+.d-row+.d-row{border-top:1px solid var(--line)}
+.d-row:hover{background:#faf9f8}
+.d-row .lbl{flex:1;min-width:0}
+.d-row .lbl small{display:block;font-size:12px}
+.d-row.set{color:var(--blue)}.d-row.set.od{color:var(--red)}
+.d-row .clr{display:none;color:var(--sub);padding:6px}.d-row.set .clr{display:flex}
+.d-row select{flex:1;border:0;background:transparent;outline:0;color:inherit;min-width:0;cursor:pointer}
+#dNotes{width:100%;border:0;outline:0;resize:vertical;min-height:110px;padding:12px;background:transparent;border-radius:4px}
+#detailFoot{height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 8px;border-top:1px solid var(--line);color:var(--sub);font-size:12px}
+#detailFoot .center{flex:1;text-align:center}
+/* menus, modals, toasts */
+.menu{position:fixed;z-index:100;background:#fff;box-shadow:0 6.4px 14.4px rgba(0,0,0,.13),0 1.2px 3.6px rgba(0,0,0,.11);border-radius:4px;min-width:220px;padding:6px 0;max-height:80vh;overflow:auto}
+.menu .mi{display:flex;align-items:center;gap:12px;width:100%;padding:0 16px;height:36px;text-align:left}
+.menu .mi:hover{background:#f3f2f1}
+.menu .mi.danger{color:var(--red)}
+.menu .mi .r{margin-left:auto;color:var(--sub);font-size:12px}
+.menu .msep{height:1px;background:var(--line);margin:4px 0}
+.menu .mhead{padding:6px 16px;font-size:12px;color:var(--sub);font-weight:600}
+.menu .mform{padding:8px 16px;display:flex;flex-direction:column;gap:8px}
+.menu .mform input,.menu .mform select{padding:6px;border:1px solid #c8c6c4;border-radius:2px}
+.menu .days{display:flex;gap:4px}.menu .days label{display:flex;flex-direction:column;align-items:center;font-size:11px}
+#overlay{position:fixed;inset:0;z-index:90}
+.backdrop{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:80;display:flex;align-items:center;justify-content:center;padding:16px}
+.modal{background:#fff;border-radius:8px;box-shadow:0 25px 50px rgba(0,0,0,.25);width:100%;max-width:440px;max-height:90vh;overflow:auto;padding:22px 24px}
+.modal h2{margin:0 0 6px;font-size:18px;font-weight:600}
+.modal p{color:var(--sub);margin:4px 0 14px;line-height:1.45}
+.modal .row-end{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;flex-wrap:wrap}
+.btn{height:32px;padding:0 16px;border-radius:4px;border:1px solid #8a8886;background:#fff;font-weight:600}
+.btn:hover{background:#f3f2f1}
+.btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}.btn.primary:hover{background:var(--blue-d)}
+.btn.danger{background:var(--red);border-color:var(--red);color:#fff}
+.btn.link{border:0;color:var(--blue);padding:0 4px;font-weight:400}
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.field label{font-size:13px;font-weight:600}
+.field input,.field select{height:34px;padding:0 10px;border:1px solid #8a8886;border-radius:4px;outline:0;background:#fff}
+.field input:focus{border-color:var(--blue);box-shadow:0 0 0 1px var(--blue)}
+.share-user{display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid var(--line);cursor:pointer}
+.share-user input{width:18px;height:18px;accent-color:var(--blue);margin:0}
+.share-user .nm{flex:1}
+.share-user .tag{font-size:12px;color:var(--sub)}
+.code{font-family:Consolas,monospace;font-size:18px;letter-spacing:2px;background:var(--blue-l);padding:6px 10px;border-radius:4px;display:inline-block;color:var(--blue-d)}
+table.users{width:100%;border-collapse:collapse;font-size:13px}table.users td{padding:6px 4px;border-bottom:1px solid var(--line)}
+.settings-sec{border-top:1px solid var(--line);padding-top:12px;margin-top:14px}
+.settings-sec h3{font-size:14px;margin:0 0 8px}
+#toasts{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:120;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;width:max-content;max-width:92vw}
+.toast{background:#323130;color:#fff;padding:10px 16px;border-radius:4px;box-shadow:var(--shadow);pointer-events:auto;display:flex;gap:12px;align-items:center}
+.toast button{color:#9fd5ff;font-weight:600}
+.toast.reminder{background:var(--blue)}
+.drag-ghost{position:fixed;z-index:200;pointer-events:none;opacity:.9;box-shadow:0 8px 20px rgba(0,0,0,.25);transform:rotate(1deg)}
+.task.dragging{opacity:.35}
+/* auth */
+#auth{position:fixed;inset:0;background:linear-gradient(160deg,#2564cf 0%,#5a8fe6 100%);display:flex;align-items:center;justify-content:center;padding:16px;z-index:70;overflow:auto}
+#auth .modal{max-width:380px}
+#auth .logo{display:flex;align-items:center;gap:10px;margin-bottom:14px;font-size:22px;font-weight:600;color:var(--blue)}
+#auth .logo img{width:40px;height:40px}
+#auth .err{color:var(--red);min-height:18px;font-size:13px;margin:4px 0}
+#auth .alt{margin-top:14px;font-size:13px;display:flex;flex-direction:column;gap:6px}
+#scrim{display:none}
+/* mobile */
+@media (max-width:767px){
+  #menuBtn{display:flex}
+  #topbar .brand{padding:0 2px}
+  #searchWrap{max-width:none}
+  #syncChip .txt{display:none}
+  #sidebar{position:fixed;top:calc(48px + env(safe-area-inset-top));bottom:0;left:0;z-index:40;transform:translateX(-100%);width:min(300px,85vw)}
+  body.nav-open #sidebar{transform:none;box-shadow:0 0 20px rgba(0,0,0,.2)}
+  body.nav-open #scrim{display:block;position:fixed;inset:0;top:48px;background:rgba(0,0,0,.35);z-index:35}
+  #detail{position:fixed;inset:0;top:calc(48px + env(safe-area-inset-top));width:auto;z-index:45;transform:translateX(100%);transition:transform .2s;border:0}
+  body.detail-open #detail{transform:none}
+  #mainHead{padding:12px 12px 6px}
+  #addBox{margin:4px 12px 8px}
+  #taskArea{padding:0 12px 90px}
+  .head-btn .t{display:none}
+  .step .x{opacity:1}
+  #detailScroll{padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+}
+@media (min-width:768px){ #detail.closed{display:none} #detailBack{display:none} }
+</style>
+</head>
+<body>
+<div id="auth" class="hidden"><div class="modal" id="authCard"></div></div>
+<div id="app" class="hidden">
+  <header id="topbar">
+    <button class="tb-btn" id="menuBtn" data-act="toggleNav" aria-label="Menu"><svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+    <div class="brand">Odmit</div>
+    <label id="searchWrap"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.8-4.8"/></svg><input id="search" type="search" placeholder="Search" autocomplete="off"></label>
+    <div id="syncChip" title="Sync status"><span class="dot"></span><span class="txt">Synced</span></div>
+    <button class="tb-btn" data-act="settings" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+    <div class="avatar" id="meAvatar" data-act="settings" title=""></div>
+  </header>
+  <div id="shell">
+    <nav id="sidebar"><div id="navScroll"></div>
+      <div id="navFooter"><button data-act="newList"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New list</button>
+        <button class="ng" data-act="newGroup" title="New group" aria-label="New group"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 10v6M9 13h6"/></svg></button></div>
+    </nav>
+    <div id="scrim" data-act="closeNav"></div>
+    <main id="main">
+      <div id="mainHead">
+        <div class="titles"><input id="viewTitle" readonly aria-label="List name"><div id="viewSub"></div></div>
+        <button class="head-btn" id="shareBtn" data-act="share"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M19 8v6M16 11h6"/></svg><span class="t">Share</span></button>
+        <button class="head-btn" id="sortBtn" data-act="sortMenu"><svg viewBox="0 0 24 24"><path d="M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4"/></svg><span class="t">Sort</span></button>
+        <button class="head-btn" id="moreBtn" data-act="listMenu" aria-label="List options"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button>
+      </div>
+      <div id="addBox"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><input id="addInput" placeholder="Add a task" maxlength="500" autocomplete="off"><button id="addBtn" data-act="addTask" class="hidden">Add</button></div>
+      <div id="taskArea"></div>
+    </main>
+    <aside id="detail" class="closed"></aside>
+  </div>
+</div>
+<div id="toasts"></div>
+<script>
+'use strict';
+/* =====================================================================  Odmit
+   Set your Apps Script web app URL here (ends in /exec), or paste it on the sign-in screen. */
+const DEFAULT_API_URL = '';
+/* ===================================================================== */
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem('odmit.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('odmit.' + k, JSON.stringify(v)); } catch (e) {} },
+  del(k) { try { localStorage.removeItem('odmit.' + k); } catch (e) {} },
+};
+const IN_GAS = !!(window.google && google.script && google.script.run);
+const qs = new URLSearchParams(location.search);
+if (qs.get('api')) LS.set('api', qs.get('api'));
+const apiUrl = () => LS.get('api', '') || DEFAULT_API_URL;
+
+/* ---------- icons ---------- */
+const IC = {
+  sun: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
+  star: '<svg viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"/></svg>',
+  cal: '<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
+  user: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>',
+  home: '<svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>',
+  list: '<svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r=".8"/><circle cx="4" cy="12" r=".8"/><circle cx="4" cy="18" r=".8"/></svg>',
+  plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  bell: '<svg viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>',
+  repeat: '<svg viewBox="0 0 24 24"><path d="M17 2l3 3-3 3"/><path d="M4 11V9a4 4 0 0 1 4-4h12M7 22l-3-3 3-3"/><path d="M20 13v2a4 4 0 0 1-4 4H4"/></svg>',
+  note: '<svg viewBox="0 0 24 24"><path d="M5 3h10l4 4v14H5z"/><path d="M9 11h6M9 15h6"/></svg>',
+  trash: '<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
+  people: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6.5 6.5 0 0 1 3.5 6"/></svg>',
+  x: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  check: '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  chev: '<svg class="chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>',
+  back: '<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
+  folder: '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
+  edit: '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
+  move: '<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
+  leave: '<svg viewBox="0 0 24 24"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>',
+  steps: '<svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>',
+};
+
+/* ---------- dates ---------- */
+const pad2 = n => String(n).padStart(2, '0');
+const ymd = d => d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+const parseYmd = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+const today = () => ymd(new Date());
+const tomorrow = () => ymd(addDays(new Date(), 1));
+const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+function dueLabel(s) {
+  if (!s) return '';
+  const t = today();
+  if (s === t) return 'Today';
+  if (s === tomorrow()) return 'Tomorrow';
+  if (s === ymd(addDays(new Date(), -1))) return 'Yesterday';
+  const d = parseYmd(s), now = new Date();
+  return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
+}
+function timeLabel(iso) {
+  const d = new Date(iso);
+  const day = ymd(d) === today() ? 'Today' : ymd(d) === tomorrow() ? 'Tomorrow' : d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  return day + ' ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+function addMonths(d, n) {
+  const x = new Date(d.getFullYear(), d.getMonth() + n, 1);
+  x.setDate(Math.min(d.getDate(), new Date(x.getFullYear(), x.getMonth() + 1, 0).getDate()));
+  return x;
+}
+function nextDue(s, r) {
+  const d = parseYmd(s || today());
+  const startOfWeek = x => addDays(x, -x.getDay());
+  switch (r.type) {
+    case 'daily': return ymd(addDays(d, 1));
+    case 'weekdays': { let x = addDays(d, 1); while (x.getDay() === 0 || x.getDay() === 6) x = addDays(x, 1); return ymd(x); }
+    case 'weekly': return ymd(addDays(d, 7));
+    case 'monthly': return ymd(addMonths(d, 1));
+    case 'yearly': return ymd(addMonths(d, 12));
+    case 'custom': {
+      const n = r.interval || 1;
+      if (r.unit === 'day') return ymd(addDays(d, n));
+      if (r.unit === 'month') return ymd(addMonths(d, n));
+      if (r.unit === 'year') return ymd(addMonths(d, 12 * n));
+      if (r.days && r.days.length) {
+        const w0 = startOfWeek(d).getTime();
+        for (let i = 1; i < 7 * n + 8; i++) {
+          const x = addDays(d, i), wk = Math.round((startOfWeek(x).getTime() - w0) / (7 * 864e5));
+          if (r.days.includes(x.getDay()) && wk % n === 0) return ymd(x);
+        }
+      }
+      return ymd(addDays(d, 7 * n));
+    }
+  }
+  return ymd(addDays(d, 1));
+}
+function repeatLabel(r) {
+  if (!r) return '';
+  if (r.type !== 'custom') return { daily: 'Daily', weekdays: 'Weekdays', weekly: 'Weekly', monthly: 'Monthly', yearly: 'Yearly' }[r.type];
+  const u = r.interval === 1 ? r.unit : r.interval + ' ' + r.unit + 's';
+  return 'Every ' + u + (r.unit === 'week' && r.days && r.days.length ? ' · ' + r.days.map(d => DOW[d]).join(', ') : '');
+}
+
+/* ---------- API transport ---------- */
+function rawApi(body) {
+  if (IN_GAS) return new Promise((res, rej) => google.script.run.withSuccessHandler(t => res(JSON.parse(t))).withFailureHandler(e => rej(e)).api(JSON.stringify(body)));
+  const url = apiUrl();
+  if (!url) return Promise.reject(new Error('NO_URL'));
+  // text/plain = "simple" request: no CORS preflight (Apps Script can't answer OPTIONS)
+  return fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body), redirect: 'follow' })
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+}
+
+/* ---------- app state ---------- */
+let session = LS.get('session', null);  // {token, userId, name}
+let server = null;                       // last state from server
+let queue = [];                          // changes not yet confirmed by the server
+let st = null;                           // server + queued changes = what you see
+const ui = { view: LS.get('view', 'myday'), selected: null, search: '', collapsed: LS.get('collapsed', {}), groupCollapsed: LS.get('gcollapsed', {}) };
+let syncStatus = 'ok', lastSync = 0;
+
+function loadLocal() {
+  server = LS.get('server.' + session.userId, null);
+  queue = LS.get('queue.' + session.userId, []);
+  rebuild();
+}
+function saveLocal() { LS.set('server.' + session.userId, server); LS.set('queue.' + session.userId, queue); }
+function rebuild() {
+  st = server ? JSON.parse(JSON.stringify(server)) : { me: { id: session.userId, name: session.name, prefs: {} }, users: [], lists: [], tasks: [] };
+  st.me.prefs = st.me.prefs || {};
+  queue.forEach(op => applyLocal(st, op));
+}
+function applyLocal(s, op) {
+  const me = s.me, L = id => s.lists.find(l => l.id === id), T = id => s.tasks.find(t => t.id === id);
+  switch (op.type) {
+    case 'list.create': if (!L(op.id)) s.lists.push({ id: op.id, name: op.name, ownerId: me.id, ownerName: me.name, isInbox: false, createdAt: new Date().toISOString(), sharedWith: [] }); break;
+    case 'list.rename': if (L(op.id)) L(op.id).name = op.name; break;
+    case 'list.delete': s.lists = s.lists.filter(l => l.id !== op.id); s.tasks = s.tasks.filter(t => t.listId !== op.id); break;
+    case 'list.share': {
+      const l = L(op.id); if (!l) break;
+      if (op.userId === me.id && !op.shared) { s.lists = s.lists.filter(x => x.id !== op.id); s.tasks = s.tasks.filter(t => t.listId !== op.id); break; }
+      l.sharedWith = l.sharedWith.filter(u => u !== op.userId); if (op.shared) l.sharedWith.push(op.userId);
+      if (!op.shared) s.tasks.forEach(t => { if (t.listId === l.id && t.assignedTo === op.userId) t.assignedTo = ''; });
+      break;
+    }
+    case 'task.create': if (!T(op.task.id)) s.tasks.push(Object.assign({ completed: false, completedAt: '', important: false, dueDate: '', myDay: '', reminderAt: '',
+      repeat: null, assignedTo: '', notes: '', steps: [], createdBy: me.id, createdAt: new Date().toISOString() }, op.task)); break;
+    case 'task.update': { const t = T(op.id); if (t) Object.assign(t, JSON.parse(JSON.stringify(op.patch))); break; }
+    case 'task.delete': s.tasks = s.tasks.filter(t => t.id !== op.id); break;
+    case 'prefs.set': s.me.prefs = JSON.parse(JSON.stringify(op.prefs)); break;
+    case 'me.update': s.me.email = op.email; break;
+  }
+}
+function mutate(op) {
+  op.opId = uid('op');
+  if (op.type === 'prefs.set' && queue.length && queue[queue.length - 1].type === 'prefs.set' && !queue[queue.length - 1].sending) queue.pop();
+  queue.push(op); applyLocal(st, op); saveLocal(); render(); scheduleFlush(300);
+}
+let flushTimer = null, flushing = false, flushAgain = false;
+function scheduleFlush(ms) { clearTimeout(flushTimer); flushTimer = setTimeout(flush, ms); }
+async function flush() {
+  if (!session) return;
+  if (flushing) { flushAgain = true; return; }
+  flushing = true; setSync('busy');
+  const sending = queue.slice();
+  sending.forEach(o => o.sending = true);
+  try {
+    const res = await rawApi(sending.length ? { action: 'batch', token: session.token, ops: sending.map(o => { const c = Object.assign({}, o); delete c.sending; return c; }) } : { action: 'sync', token: session.token });
+    if (!res.ok) {
+      sending.forEach(o => delete o.sending);
+      if (res.code === 'AUTH') { toast(res.error); return signOut(true); }
+      setSync('err', res.error); return;
+    }
+    const sent = new Set(sending.map(o => o.opId));
+    queue = queue.filter(o => !sent.has(o.opId));
+    (res.results || []).filter(r => !r.ok && r.code !== 'GONE').forEach(r => toast("Couldn't save a change: " + r.error));
+    delete res.results; delete res.ok; delete res.inviteCode; delete res.invitedName;
+    server = res; lastSync = Date.now();
+    if (res.me) { session.name = res.me.name; LS.set('session', session); }
+    rebuild(); saveLocal(); render(); setSync(queue.length ? 'busy' : 'ok');
+  } catch (e) {
+    sending.forEach(o => delete o.sending);
+    setSync('off');
+  } finally {
+    flushing = false;
+    if (flushAgain || (queue.length && syncStatus === 'busy')) { flushAgain = false; scheduleFlush(200); }
+  }
+}
+function setSync(s, msg) {
+  syncStatus = s;
+  const c = $('#syncChip'); if (!c) return;
+  c.className = s === 'ok' ? '' : s;
+  const n = queue.length;
+  const txt = s === 'ok' ? 'Synced' : s === 'busy' ? 'Syncing…' : s === 'off' ? 'Offline' + (n ? ' · ' + n + ' waiting' : '') : 'Sync error';
+  c.querySelector('.txt').textContent = txt;
+  c.title = (s === 'err' ? msg : s === 'off' ? "Can't reach the server. Your changes are saved on this device and sent automatically when you're back online." : txt) + (lastSync ? '\nLast synced ' + new Date(lastSync).toLocaleTimeString() : '');
+}
+window.addEventListener('online', () => scheduleFlush(100));
+document.addEventListener('visibilitychange', () => { if (!document.hidden) scheduleFlush(100); });
+setInterval(() => { if (session && !document.hidden) flush(); }, 30000);
+
+/* ---------- helpers on state ---------- */
+const me = () => st.me;
+const inbox = () => st.lists.find(l => l.isInbox && l.ownerId === me().id);
+const listOf = t => st.lists.find(l => l.id === t.listId);
+const userName = id => (st.users.find(u => u.id === id) || {}).name || (id === me().id ? me().name : 'Someone');
+const initials = n => String(n || '?').split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
+const isShared = l => l && (l.ownerId !== me().id || (l.sharedWith || []).length > 0);
+const members = l => l ? [l.ownerId].concat(l.sharedWith || []) : [];
+const prefs = () => st.me.prefs || {};
+function setPrefs(fn) { const p = JSON.parse(JSON.stringify(prefs())); fn(p); mutate({ type: 'prefs.set', prefs: p }); }
+
+const SMART = [
+  { id: 'myday', name: 'My Day', icon: 'sun' },
+  { id: 'important', name: 'Important', icon: 'star' },
+  { id: 'planned', name: 'Planned', icon: 'cal' },
+  { id: 'assigned', name: 'Assigned to me', icon: 'user' },
+  { id: 'inbox', name: 'Tasks', icon: 'home' },
+];
+function viewInfo() {
+  if (ui.search) return { kind: 'search', name: 'Searching for "' + ui.search + '"' };
+  const s = SMART.find(x => x.id === ui.view);
+  if (s) return Object.assign({ kind: 'smart', list: s.id === 'inbox' ? inbox() : null }, s);
+  const l = st.lists.find(x => x.id === ui.view);
+  if (l) return { kind: 'list', id: l.id, name: l.name, list: l };
+  ui.view = 'myday'; return viewInfo();
+}
+function tasksFor(v) {
+  const t = today(), all = st.tasks;
+  if (v.kind === 'search') {
+    const q = ui.search.toLowerCase();
+    return all.filter(x => (x.title + ' ' + x.notes + ' ' + (x.steps || []).map(s => s.title).join(' ')).toLowerCase().includes(q));
+  }
+  switch (v.id) {
+    case 'myday': return all.filter(x => x.myDay === t);
+    case 'important': return all.filter(x => x.important);
+    case 'planned': return all.filter(x => x.dueDate && !x.completed);
+    case 'assigned': return all.filter(x => x.assignedTo === me().id);
+    case 'inbox': return all.filter(x => x.listId === (inbox() || {}).id);
+  }
+  return all.filter(x => x.listId === v.id);
+}
+const SORTS = { importance: 'Importance', dueDate: 'Due date', alpha: 'Alphabetically', created: 'Creation date' };
+function sortKeyFor(v) { return v.kind === 'search' ? 'search' : (v.id || ui.view); }
+function sortTasks(arr, v) {
+  const s = (prefs().sort || {})[sortKeyFor(v)];
+  const byOrder = (a, b) => (a.order || 0) - (b.order || 0);
+  if (!s) return arr.sort(v.id === 'planned' ? (a, b) => a.dueDate.localeCompare(b.dueDate) || byOrder(a, b) : byOrder);
+  const dir = s.dir === 'desc' ? -1 : 1;
+  const f = {
+    importance: (a, b) => (b.important - a.important) * dir || byOrder(a, b),
+    dueDate: (a, b) => ((a.dueDate || '9999') .localeCompare(b.dueDate || '9999')) * dir || byOrder(a, b),
+    alpha: (a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }) * dir,
+    created: (a, b) => (b.createdAt || '').localeCompare(a.createdAt || '') * dir,
+  }[s.by];
+  return arr.sort(f || byOrder);
+}
+
+/* ---------- render ---------- */
+function render() { if (!st) return; renderTop(); renderNav(); renderMain(); renderDetail(); }
+function renderTop() {
+  $('#meAvatar').textContent = initials(me().name); $('#meAvatar').title = me().name + ' – settings';
+  setSync(syncStatus);
+}
+function navOrder() {
+  // top-level items (groups + ungrouped lists) and grouped lists, ordered by prefs.order
+  const p = prefs(), order = p.order || [], groups = p.groups || [], lg = p.listGroup || {};
+  const custom = st.lists.filter(l => !(l.isInbox && l.ownerId === me().id));
+  const idx = id => { const i = order.indexOf(id); return i < 0 ? 1e9 + (custom.findIndex(l => l.id === id) + 1 || groups.findIndex(g => g.id === id)) : i; };
+  const gIds = new Set(groups.map(g => g.id));
+  const top = groups.map(g => ({ type: 'group', g })).concat(custom.filter(l => !gIds.has(lg[l.id])).map(l => ({ type: 'list', l })));
+  top.sort((a, b) => idx(a.type === 'group' ? a.g.id : a.l.id) - idx(b.type === 'group' ? b.g.id : b.l.id));
+  top.forEach(it => { if (it.type === 'group') it.lists = custom.filter(l => lg[l.id] === it.g.id).sort((a, b) => idx(a.id) - idx(b.id)); });
+  return top;
+}
+function countFor(v) { return tasksFor(v).filter(t => !t.completed).length; }
+function navItem(id, name, icon, count, extra) {
+  const active = !ui.search && ui.view === id;
+  return `<div class="nav-item${active ? ' active' : ''}" data-act="nav" data-id="${esc(id)}" data-drop="${esc(id)}" ${extra || ''}>${IC[icon]}<span class="name">${esc(name)}</span>`
+    + (extra && extra.includes('data-shared') ? `<span class="shared-ic" title="Shared list">${IC.people}</span>` : '')
+    + `<span class="count">${count || ''}</span></div>`;
+}
+function renderNav() {
+  let h = SMART.map(s => navItem(s.id, s.name, s.icon, countFor({ kind: 'smart', id: s.id }))).join('') + '<div class="nav-sep"></div>';
+  navOrder().forEach(it => {
+    if (it.type === 'list') h += navItem(it.l.id, it.l.name, 'list', countFor({ id: it.l.id }), `data-drag="list" data-lid="${esc(it.l.id)}"` + (isShared(it.l) ? ' data-shared="1"' : ''));
+    else {
+      const c = !!ui.groupCollapsed[it.g.id];
+      h += `<div class="nav-group${c ? ' collapsed' : ''}" data-act="groupToggle" data-gid="${esc(it.g.id)}" data-drop="group:${esc(it.g.id)}" data-drag="group" data-lid="${esc(it.g.id)}">${IC.chev}<span class="name">${esc(it.g.name)}</span>`
+        + `<button class="head-btn" data-act="groupMenu" data-gid="${esc(it.g.id)}" aria-label="Group options" style="height:28px;padding:0 4px">${IC.edit}</button></div>`;
+      if (!c) h += '<div class="nav-group-items">' + (it.lists.length ? it.lists.map(l => navItem(l.id, l.name, 'list', countFor({ id: l.id }), `data-drag="list" data-lid="${esc(l.id)}"` + (isShared(l) ? ' data-shared="1"' : ''))).join('')
+        : '<div class="nav-item" style="color:var(--sub);cursor:default;font-size:12px" data-drop="group:' + esc(it.g.id) + '">Drag lists here</div>') + '</div>';
+    }
+  });
+  $('#navScroll').innerHTML = h;
+}
+function taskRow(t, v) {
+  const l = listOf(t), meta = [];
+  if (v.kind !== 'list' && !(v.id === 'inbox')) meta.push(`<span>${esc(l ? l.name : '')}</span>`);
+  if (t.myDay === today() && v.id !== 'myday') meta.push(`<span>${IC.sun}My Day</span>`);
+  if (t.steps && t.steps.length) meta.push(`<span>${t.steps.filter(s => s.done).length} of ${t.steps.length}</span>`);
+  if (t.dueDate) { const od = !t.completed && t.dueDate < today(); meta.push(`<span class="${od ? 'od' : t.dueDate === today() ? 'td' : ''}">${IC.cal}${od ? 'Overdue, ' : ''}${esc(dueLabel(t.dueDate))}</span>`); }
+  if (t.reminderAt && !t.completed) meta.push(`<span>${IC.bell}${esc(timeLabel(t.reminderAt))}</span>`);
+  if (t.repeat) meta.push(`<span title="${esc(repeatLabel(t.repeat))}">${IC.repeat}</span>`);
+  if (t.notes) meta.push(`<span title="Has notes">${IC.note}</span>`);
+  if (t.assignedTo) meta.push(`<span class="avatar sm" title="Assigned to ${esc(userName(t.assignedTo))}">${esc(initials(userName(t.assignedTo)))}</span>`);
+  return `<div class="task${t.completed ? ' done' : ''}${ui.selected === t.id ? ' selected' : ''}" data-act="open" data-id="${esc(t.id)}" data-drag="task" data-tid="${esc(t.id)}">
+    <button class="circle${t.completed ? ' on' : ''}" data-act="toggle" data-id="${esc(t.id)}" aria-label="${t.completed ? 'Mark as not completed' : 'Mark as completed'}">${IC.check}</button>
+    <div class="body"><div class="title">${esc(t.title)}</div>${meta.length ? '<div class="meta">' + meta.join('') + '</div>' : ''}</div>
+    <button class="star${t.important ? ' on' : ''}" data-act="star" data-id="${esc(t.id)}" aria-label="${t.important ? 'Remove importance' : 'Mark as important'}">${IC.star}</button></div>`;
+}
+function section(key, title, tasks, v, cls) {
+  if (!tasks.length) return '';
+  const c = !!ui.collapsed[key];
+  return `<div class="sec-head${c ? ' collapsed' : ''} ${cls || ''}" data-act="collapse" data-key="${esc(key)}">${IC.chev}${esc(title)} <span class="cnt">${tasks.length}</span></div>`
+    + (c ? '' : tasks.map(t => taskRow(t, v)).join(''));
+}
+function renderMain() {
+  const v = viewInfo(), titleEl = $('#viewTitle');
+  const owner = v.kind === 'list' && v.list.ownerId === me().id;
+  if (document.activeElement !== titleEl) titleEl.value = v.name;
+  titleEl.readOnly = !owner;
+  document.title = v.name + ' – Odmit';
+  const sub = [];
+  if (v.id === 'myday') sub.push(esc(new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })));
+  if (v.kind === 'list' && v.list.ownerId !== me().id) sub.push(`<span class="chip">${IC.people}Shared by ${esc(v.list.ownerName)}</span>`);
+  if (v.kind === 'list' && v.list.ownerId === me().id && v.list.sharedWith.length) sub.push(`<span class="chip">${IC.people}Shared with ${v.list.sharedWith.map(u => esc(userName(u))).join(', ')}</span>`);
+  const srt = (prefs().sort || {})[sortKeyFor(v)];
+  if (srt) sub.push(`<span class="chip">Sorted by ${esc(SORTS[srt.by])} <button data-act="sortDir" title="Reverse">${srt.dir === 'desc' ? '↓' : '↑'}</button><button data-act="sortClear" title="Remove sort">✕</button></span>`);
+  $('#viewSub').innerHTML = sub.join('');
+  $('#shareBtn').classList.toggle('hidden', v.kind !== 'list');
+  $('#shareBtn').querySelector('.t').textContent = v.kind === 'list' && !owner ? 'Members' : 'Share';
+  $('#moreBtn').classList.toggle('hidden', v.kind !== 'list');
+  $('#sortBtn').classList.toggle('hidden', v.id === 'planned');
+  $('#addBox').classList.toggle('hidden', v.id === 'assigned' || v.kind === 'search');
+  $('#addInput').placeholder = v.id === 'planned' ? 'Add a task due today' : 'Add a task';
+
+  const tasks = sortTasks(tasksFor(v), v);
+  const open = tasks.filter(t => !t.completed), done = tasks.filter(t => t.completed).sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || ''));
+  let h = '';
+  if (v.kind === 'search') {
+    const byList = {};
+    tasks.forEach(t => (byList[t.listId] = byList[t.listId] || []).push(t));
+    h = Object.keys(byList).map(id => { const l = st.lists.find(x => x.id === id); return section('s:' + id, l ? l.name : '?', byList[id], v); }).join('');
+    if (!tasks.length) h = `<div class="empty">${IC.list}<p>No tasks match "${esc(ui.search)}"</p></div>`;
+  } else if (v.id === 'planned') {
+    const t = today(), tm = tomorrow();
+    h = section('p:od', 'Overdue', open.filter(x => x.dueDate < t), v, 'overdue') + section('p:td', 'Today', open.filter(x => x.dueDate === t), v)
+      + section('p:tm', 'Tomorrow', open.filter(x => x.dueDate === tm), v) + section('p:later', 'Later', open.filter(x => x.dueDate > tm), v);
+    if (!open.length) h = `<div class="empty">${IC.cal}<p>Tasks with due dates show up here.</p></div>`;
+  } else {
+    h = open.map(t => taskRow(t, v)).join('') + section('done:' + sortKeyFor(v), 'Completed', done, v);
+    if (!tasks.length) h = `<div class="empty">${IC[v.icon || 'list']}<p>${v.id === 'myday' ? 'Focus on your day. Add tasks to My Day.' : v.id === 'assigned' ? 'Tasks assigned to you in shared lists show up here.' : v.id === 'important' ? 'Star tasks to see them here.' : 'No tasks yet.'}</p></div>`;
+  }
+  $('#taskArea').innerHTML = h;
+  document.querySelectorAll('.nav-item.active').forEach(e => e.scrollIntoView && 0);
+}
+
+/* ---------- detail pane ---------- */
+function renderDetail(force) {
+  const pane = $('#detail'), t = st.tasks.find(x => x.id === ui.selected);
+  if (!t) { if (ui.selected) ui.selected = null; pane.classList.add('closed'); document.body.classList.remove('detail-open'); pane.innerHTML = ''; return; }
+  pane.classList.remove('closed'); document.body.classList.add('detail-open');
+  if (!force && pane.dataset.tid === t.id && pane.contains(document.activeElement) && document.activeElement.matches('input,textarea,select')) return; // don't disturb typing
+  pane.dataset.tid = t.id;
+  const l = listOf(t), shared = isShared(l), td = today();
+  const od = t.dueDate && t.dueDate < td && !t.completed;
+  const steps = (t.steps || []).map((s, i) => `<div class="step${s.done ? ' done' : ''}"><button class="circle${s.done ? ' on' : ''}" data-act="stepToggle" data-i="${i}" aria-label="Complete step">${IC.check}</button>
+    <input value="${esc(s.title)}" data-step="${i}" maxlength="500" aria-label="Step"><button class="x" data-act="stepDel" data-i="${i}" aria-label="Delete step">${IC.x}</button></div>`).join('');
+  const listOpts = st.lists.slice().sort((a, b) => (b.isInbox && b.ownerId === me().id) - (a.isInbox && a.ownerId === me().id)).map(x => `<option value="${esc(x.id)}"${x.id === t.listId ? ' selected' : ''}>${esc(x.isInbox && x.ownerId === me().id ? 'Tasks' : x.name)}</option>`).join('');
+  const assign = shared ? `<div class="d-card"><div class="d-row${t.assignedTo ? ' set' : ''}">${IC.user}<select id="dAssign" aria-label="Assign to"><option value="">Assign to…</option>${members(l).map(u => `<option value="${esc(u)}"${u === t.assignedTo ? ' selected' : ''}>${u === me().id ? 'Me (' + esc(me().name) + ')' : esc(userName(u))}</option>`).join('')}</select></div></div>` : '';
+  pane.innerHTML = `<div id="detailScroll">
+    <div class="d-card"><div class="d-title"><button class="circle${t.completed ? ' on' : ''}" data-act="toggle" data-id="${esc(t.id)}" aria-label="Complete">${IC.check}</button>
+      <textarea id="dTitle" rows="1" maxlength="500" aria-label="Task title">${esc(t.title)}</textarea>
+      <button class="star${t.important ? ' on' : ''}" data-act="star" data-id="${esc(t.id)}" aria-label="Important">${IC.star}</button></div>
+      ${steps}<div class="add-step">${IC.plus}<input id="dAddStep" placeholder="${t.steps && t.steps.length ? 'Next step' : 'Add step'}" maxlength="500"></div></div>
+    <div class="d-card"><div class="d-row${t.myDay === td ? ' set' : ''}" data-act="${t.myDay === td ? '' : 'myDayOn'}" id="dMyDay">${IC.sun}<span class="lbl">${t.myDay === td ? 'Added to My Day' : 'Add to My Day'}</span><button class="clr" data-act="myDayOff" aria-label="Remove from My Day">${IC.x}</button></div></div>
+    <div class="d-card">
+      <div class="d-row${t.reminderAt ? ' set' : ''}" data-act="remindMenu" id="dRemind">${IC.bell}<span class="lbl">${t.reminderAt ? 'Remind me at ' + esc(new Date(t.reminderAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })) + '<small>' + esc(dueLabel(ymd(new Date(t.reminderAt)))) + '</small>' : 'Remind me'}</span><button class="clr" data-act="remindClear" aria-label="Remove reminder">${IC.x}</button></div>
+      <div class="d-row${t.dueDate ? ' set' : ''}${od ? ' od' : ''}" data-act="dueMenu" id="dDue">${IC.cal}<span class="lbl">${t.dueDate ? (od ? 'Overdue, ' : 'Due ') + esc(dueLabel(t.dueDate)) : 'Add due date'}</span><button class="clr" data-act="dueClear" aria-label="Remove due date">${IC.x}</button></div>
+      <div class="d-row${t.repeat ? ' set' : ''}" data-act="repeatMenu" id="dRepeat">${IC.repeat}<span class="lbl">${t.repeat ? esc(repeatLabel(t.repeat)) : 'Repeat'}</span><button class="clr" data-act="repeatClear" aria-label="Never repeat">${IC.x}</button></div>
+    </div>
+    ${assign}
+    <div class="d-card"><div class="d-row">${IC.list}<select id="dList" aria-label="List">${listOpts}</select></div></div>
+    <div class="d-card"><textarea id="dNotes" placeholder="Add note" maxlength="20000">${esc(t.notes)}</textarea></div>
+  </div>
+  <div id="detailFoot"><button class="tb-btn" data-act="closeDetail" id="detailClose" aria-label="Close details">${matchMedia('(max-width:767px)').matches ? IC.back : '<svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>'}</button>
+    <span class="center">Created ${esc(new Date(t.createdAt).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }))}${t.createdBy && t.createdBy !== me().id ? ' by ' + esc(userName(t.createdBy)) : ''}${t.completed && t.completedAt ? '<br>Completed ' + esc(dueLabel(ymd(new Date(t.completedAt)))) : ''}</span>
+    <button class="tb-btn" data-act="deleteTask" aria-label="Delete task" title="Delete task">${IC.trash}</button></div>`;
+  autoGrow($('#dTitle'));
+}
+function autoGrow(el) { if (!el) return; el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
+const selTask = () => st ? st.tasks.find(x => x.id === ui.selected) : null;
+const upd = (id, patch) => mutate({ type: 'task.update', id, patch });
+/* ---------- task actions ---------- */
+function addTask(title) {
+  title = title.trim(); if (!title) return;
+  const v = viewInfo();
+  const listId = v.kind === 'list' ? v.id : (inbox() || {}).id;
+  if (!listId) return toast('Still loading your lists, try again in a moment');
+  const sameList = st.tasks.filter(t => t.listId === listId);
+  const task = { id: uid('t_'), listId, title, order: sameList.length ? Math.min(...sameList.map(t => t.order || 0)) - 1000 : 0, createdAt: new Date().toISOString(), createdBy: me().id };
+  if (v.id === 'myday') task.myDay = today();
+  if (v.id === 'important') task.important = true;
+  if (v.id === 'planned') task.dueDate = today();
+  mutate({ type: 'task.create', task });
+}
+function toggleTask(id) {
+  const t = st.tasks.find(x => x.id === id); if (!t) return;
+  if (t.completed) return upd(id, { completed: false, completedAt: '' });
+  const patch = { completed: true, completedAt: new Date().toISOString() };
+  if (t.repeat) { // like Microsoft To Do: completing a repeating task creates the next one
+    const due = nextDue(t.dueDate || today(), t.repeat);
+    const nt = { id: uid('t_'), listId: t.listId, title: t.title, important: t.important, notes: t.notes, repeat: t.repeat, assignedTo: t.assignedTo,
+      dueDate: due, steps: (t.steps || []).map(s => ({ id: uid('s'), title: s.title, done: false })), order: t.order, createdAt: new Date().toISOString(), createdBy: me().id };
+    if (t.reminderAt) { const shift = parseYmd(due) - parseYmd(t.dueDate || today()); nt.reminderAt = new Date(new Date(t.reminderAt).getTime() + shift).toISOString(); }
+    patch.repeat = null;
+    upd(id, patch); mutate({ type: 'task.create', task: nt });
+    return toast('Completed. Next one is due ' + dueLabel(due));
+  }
+  upd(id, patch);
+}
+async function deleteTask(id) {
+  const t = st.tasks.find(x => x.id === id); if (!t) return;
+  if (!(await confirmDialog('Delete task?', `"${t.title}" will be permanently deleted.`, 'Delete task', true))) return;
+  if (ui.selected === id) ui.selected = null;
+  mutate({ type: 'task.delete', id });
+}
+function stepsOf(t) { return JSON.parse(JSON.stringify(t.steps || [])); }
+
+/* ---------- list actions ---------- */
+async function newList() {
+  const id = uid('l_');
+  mutate({ type: 'list.create', id, name: 'Untitled list' });
+  go(id);
+  setTimeout(() => { const el = $('#viewTitle'); el.focus(); el.select(); }, 30);
+}
+async function newGroup() {
+  const name = await promptDialog('New group', 'Untitled group', 'Group name');
+  if (!name) return;
+  setPrefs(p => { p.groups = (p.groups || []).concat([{ id: uid('g_'), name: name.slice(0, 60) }]); });
+}
+function renameList(id, name) {
+  const l = st.lists.find(x => x.id === id); name = (name || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  if (!l || !name || name === l.name) return;
+  mutate({ type: 'list.rename', id, name });
+}
+async function deleteList(id) {
+  const l = st.lists.find(x => x.id === id); if (!l) return;
+  const n = st.tasks.filter(t => t.listId === id).length;
+  if (!(await confirmDialog('Delete list?', `"${l.name}" and its ${n} task${n === 1 ? '' : 's'} will be permanently deleted${isShared(l) ? ' for everyone it is shared with' : ''}.`, 'Delete list', true))) return;
+  mutate({ type: 'list.delete', id }); go('inbox');
+}
+async function leaveList(id) {
+  const l = st.lists.find(x => x.id === id); if (!l) return;
+  if (!(await confirmDialog('Leave list?', `You will no longer see "${l.name}". ${esc(l.ownerName)} can share it with you again.`, 'Leave list', true))) return;
+  closeModal(); mutate({ type: 'list.share', id, userId: me().id, shared: false }); go('inbox');
+}
+function moveListToGroup(lid, gid) { setPrefs(p => { p.listGroup = p.listGroup || {}; if (gid) p.listGroup[lid] = gid; else delete p.listGroup[lid]; }); }
+function go(view) {
+  ui.view = view; ui.search = ''; $('#search').value = ''; ui.selected = null; LS.set('view', view);
+  document.body.classList.remove('nav-open'); render(); $('#taskArea').scrollTop = 0;
+}
+
+/* ---------- menus / dialogs / toasts ---------- */
+function closeMenu() { document.querySelectorAll('.menu,#overlay').forEach(e => e.remove()); }
+function showMenu(anchor, items, opts) {
+  closeMenu();
+  const ov = document.createElement('div'); ov.id = 'overlay'; ov.onclick = closeMenu; document.body.appendChild(ov);
+  const m = document.createElement('div'); m.className = 'menu'; m.setAttribute('role', 'menu');
+  items.forEach(it => {
+    if (it === '-') { m.insertAdjacentHTML('beforeend', '<div class="msep"></div>'); return; }
+    if (it.head) { m.insertAdjacentHTML('beforeend', `<div class="mhead">${esc(it.head)}</div>`); return; }
+    if (it.html) { const d = document.createElement('div'); d.innerHTML = it.html; m.appendChild(d); if (it.init) it.init(d); return; }
+    const b = document.createElement('button'); b.className = 'mi' + (it.danger ? ' danger' : ''); b.setAttribute('role', 'menuitem');
+    b.innerHTML = (it.icon ? IC[it.icon] : '') + `<span>${esc(it.label)}</span>` + (it.right ? `<span class="r">${esc(it.right)}</span>` : '') + (it.checked ? `<span class="r">${IC.check}</span>` : '');
+    b.onclick = e => { e.stopPropagation(); if (!it.keepOpen) closeMenu(); it.fn && it.fn(); };
+    m.appendChild(b);
+  });
+  document.body.appendChild(m);
+  const r = anchor.getBoundingClientRect(), mw = m.offsetWidth, mh = m.offsetHeight;
+  let x = (opts && opts.alignRight) ? r.right - mw : r.left, y = r.bottom + 4;
+  if (x + mw > innerWidth - 8) x = innerWidth - mw - 8; if (x < 8) x = 8;
+  if (y + mh > innerHeight - 8) y = Math.max(8, r.top - mh - 4);
+  m.style.left = x + 'px'; m.style.top = y + 'px';
+  const f = m.querySelector('input,button'); if (f && !(opts && opts.noFocus)) f.focus();
+  return m;
+}
+function openModal(html, onClose) {
+  closeModal();
+  const b = document.createElement('div'); b.className = 'backdrop'; b.id = 'modalBack';
+  b.innerHTML = `<div class="modal" role="dialog" aria-modal="true">${html}</div>`;
+  b.addEventListener('mousedown', e => { if (e.target === b) closeModal(); });
+  b._onClose = onClose;
+  document.body.appendChild(b); return b.firstChild;
+}
+function closeModal() { const b = $('#modalBack'); if (b) { b.remove(); b._onClose && b._onClose(); } }
+function confirmDialog(title, text, ok, danger) {
+  return new Promise(res => {
+    let done = false; const fin = v => { if (!done) { done = true; res(v); } };
+    const m = openModal(`<h2>${esc(title)}</h2><p>${esc(text)}</p><div class="row-end"><button class="btn" data-x="0">Cancel</button><button class="btn ${danger ? 'danger' : 'primary'}" data-x="1">${esc(ok)}</button></div>`, () => fin(false));
+    m.querySelectorAll('[data-x]').forEach(b => b.onclick = () => { fin(b.dataset.x === '1'); closeModal(); });
+    m.querySelector('[data-x="1"]').focus();
+  });
+}
+function promptDialog(title, value, label) {
+  return new Promise(res => {
+    let done = false; const fin = v => { if (!done) { done = true; res(v); } };
+    const m = openModal(`<h2>${esc(title)}</h2><div class="field" style="margin-top:12px"><label>${esc(label)}</label><input id="pdIn" maxlength="60" value="${esc(value)}"></div>
+      <div class="row-end"><button class="btn" data-x="0">Cancel</button><button class="btn primary" data-x="1">Save</button></div>`, () => fin(null));
+    const inp = m.querySelector('#pdIn'); inp.focus(); inp.select();
+    const ok = () => { fin(inp.value.trim() || null); closeModal(); };
+    inp.onkeydown = e => { if (e.key === 'Enter') ok(); };
+    m.querySelector('[data-x="1"]').onclick = ok; m.querySelector('[data-x="0"]').onclick = () => { fin(null); closeModal(); };
+  });
+}
+function toast(msg, action, cls, ms) {
+  const t = document.createElement('div'); t.className = 'toast ' + (cls || ''); t.innerHTML = `<span>${esc(msg)}</span>`;
+  if (action) { const b = document.createElement('button'); b.textContent = action.label; b.onclick = () => { action.fn(); t.remove(); }; t.appendChild(b); }
+  $('#toasts').appendChild(t); setTimeout(() => t.remove(), ms || 4000);
+}
+
+/* ---------- detail pane menus ---------- */
+const at9 = d => { const x = new Date(d); x.setHours(9, 0, 0, 0); return x; };
+const nextMonday = () => { const d = new Date(); return addDays(d, ((8 - d.getDay()) % 7) || 7); };
+function remindMenu(anchor) {
+  const t = selTask(); if (!t) return;
+  const later = new Date(); later.setHours(later.getHours() + 3, 0, 0, 0);
+  const set = d => { upd(t.id, { reminderAt: d.toISOString() }); askNotify(); };
+  const def = t.reminderAt ? new Date(t.reminderAt) : at9(addDays(new Date(), 1));
+  const local = new Date(def.getTime() - def.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  showMenu(anchor, [
+    ...(later.getDate() === new Date().getDate() ? [{ label: 'Later today', icon: 'bell', right: later.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }), fn: () => set(later) }] : []),
+    { label: 'Tomorrow', icon: 'bell', right: DOW[addDays(new Date(), 1).getDay()] + ' 9 AM', fn: () => set(at9(addDays(new Date(), 1))) },
+    { label: 'Next week', icon: 'bell', right: 'Mon 9 AM', fn: () => set(at9(nextMonday())) }, '-',
+    { head: 'Pick a date & time' },
+    { html: `<div class="mform"><input type="datetime-local" id="mRemindAt" value="${local}"><button class="btn primary" id="mRemindSave">Save</button></div>`,
+      init: d => d.querySelector('#mRemindSave').onclick = () => { const v = d.querySelector('#mRemindAt').value; if (v) { closeMenu(); set(new Date(v)); } } },
+  ], { noFocus: true });
+}
+function dueMenu(anchor) {
+  const t = selTask(); if (!t) return;
+  const set = s => upd(t.id, { dueDate: s });
+  showMenu(anchor, [
+    { label: 'Today', icon: 'cal', right: DOW[new Date().getDay()], fn: () => set(today()) },
+    { label: 'Tomorrow', icon: 'cal', right: DOW[addDays(new Date(), 1).getDay()], fn: () => set(tomorrow()) },
+    { label: 'Next week', icon: 'cal', right: 'Mon', fn: () => set(ymd(nextMonday())) }, '-',
+    { head: 'Pick a date' },
+    { html: `<div class="mform"><input type="date" id="mDueAt" value="${esc(t.dueDate || tomorrow())}"><button class="btn primary" id="mDueSave">Save</button></div>`,
+      init: d => d.querySelector('#mDueSave').onclick = () => { const v = d.querySelector('#mDueAt').value; if (v) { closeMenu(); set(v); } } },
+  ], { noFocus: true });
+}
+function repeatMenu(anchor) {
+  const t = selTask(); if (!t) return;
+  const set = r => upd(t.id, Object.assign({ repeat: r }, t.dueDate ? {} : { dueDate: today() }));
+  const cur = t.repeat || {};
+  const c = cur.type === 'custom' ? cur : { interval: 1, unit: 'week', days: [new Date().getDay()] };
+  showMenu(anchor, [
+    { label: 'Daily', icon: 'repeat', checked: cur.type === 'daily', fn: () => set({ type: 'daily' }) },
+    { label: 'Weekdays', icon: 'repeat', checked: cur.type === 'weekdays', fn: () => set({ type: 'weekdays' }) },
+    { label: 'Weekly', icon: 'repeat', checked: cur.type === 'weekly', fn: () => set({ type: 'weekly' }) },
+    { label: 'Monthly', icon: 'repeat', checked: cur.type === 'monthly', fn: () => set({ type: 'monthly' }) },
+    { label: 'Yearly', icon: 'repeat', checked: cur.type === 'yearly', fn: () => set({ type: 'yearly' }) }, '-',
+    { head: 'Custom' },
+    { html: `<div class="mform"><div style="display:flex;gap:6px;align-items:center">Every <input type="number" id="mRepN" min="1" max="999" value="${c.interval || 1}" style="width:60px">
+      <select id="mRepU">${['day', 'week', 'month', 'year'].map(u => `<option value="${u}"${c.unit === u ? ' selected' : ''}>${u}(s)</option>`).join('')}</select></div>
+      <div class="days" id="mRepD">${DOW.map((d, i) => `<label>${d[0]}<input type="checkbox" value="${i}"${(c.days || []).includes(i) ? ' checked' : ''}></label>`).join('')}</div>
+      <button class="btn primary" id="mRepSave">Save</button></div>`,
+      init: d => {
+        const u = d.querySelector('#mRepU'), days = d.querySelector('#mRepD');
+        const sync = () => days.style.display = u.value === 'week' ? 'flex' : 'none'; u.onchange = sync; sync();
+        d.querySelector('#mRepSave').onclick = () => {
+          const r = { type: 'custom', interval: Math.max(1, +d.querySelector('#mRepN').value || 1), unit: u.value };
+          if (r.unit === 'week') r.days = [...days.querySelectorAll('input:checked')].map(x => +x.value);
+          closeMenu(); set(r);
+        };
+      } },
+  ], { noFocus: true });
+}
+function sortMenu(anchor) {
+  const v = viewInfo(), key = sortKeyFor(v), cur = (prefs().sort || {})[key];
+  showMenu(anchor, [{ head: 'Sort by' }].concat(Object.keys(SORTS).map(k => ({ label: SORTS[k], checked: cur && cur.by === k,
+    fn: () => setPrefs(p => { p.sort = p.sort || {}; p.sort[key] = { by: k, dir: k === 'importance' || k === 'created' ? 'asc' : 'asc' }; }) })),
+    cur ? ['-', { label: 'Remove sort (manual order)', fn: () => setPrefs(p => { delete p.sort[key]; }) }] : []), { alignRight: true });
+}
+function listMenu(anchor) {
+  const v = viewInfo(); if (v.kind !== 'list') return;
+  const l = v.list, owner = l.ownerId === me().id, groups = prefs().groups || [], cg = (prefs().listGroup || {})[l.id];
+  const items = [];
+  if (owner) items.push({ label: 'Rename list', icon: 'edit', fn: () => { const el = $('#viewTitle'); el.focus(); el.select(); } });
+  items.push({ label: owner ? 'Share list' : 'Members', icon: 'people', fn: () => shareModal(l.id) });
+  items.push({ label: 'Sort by', icon: 'list', fn: () => sortMenu(anchor) });
+  if (groups.length) { items.push('-', { head: 'Move to group' }); groups.forEach(g => items.push({ label: g.name, icon: 'folder', checked: cg === g.id, fn: () => moveListToGroup(l.id, g.id) })); if (cg) items.push({ label: 'No group', fn: () => moveListToGroup(l.id, null) }); }
+  items.push('-');
+  if (owner) items.push({ label: 'Delete list', icon: 'trash', danger: true, fn: () => deleteList(l.id) });
+  else items.push({ label: 'Leave list', icon: 'leave', danger: true, fn: () => leaveList(l.id) });
+  showMenu(anchor, items, { alignRight: true });
+}
+function groupMenu(anchor, gid) {
+  const g = (prefs().groups || []).find(x => x.id === gid); if (!g) return;
+  showMenu(anchor, [
+    { label: 'Rename group', icon: 'edit', fn: async () => { const n = await promptDialog('Rename group', g.name, 'Group name'); if (n) setPrefs(p => { p.groups.find(x => x.id === gid).name = n.slice(0, 60); }); } },
+    { label: 'Ungroup lists', icon: 'trash', danger: true, fn: () => setPrefs(p => { p.groups = p.groups.filter(x => x.id !== gid); Object.keys(p.listGroup || {}).forEach(k => { if (p.listGroup[k] === gid) delete p.listGroup[k]; }); }) },
+  ]);
+}
+
+/* ---------- share panel ---------- */
+function shareModal(listId) {
+  const l = st.lists.find(x => x.id === listId); if (!l) return;
+  const owner = l.ownerId === me().id;
+  const others = st.users.filter(u => u.id !== me().id && u.id !== l.ownerId);
+  let body;
+  if (owner) {
+    body = `<h2>Share "${esc(l.name)}"</h2><p>Tick the people who should see this list. They can view, add, edit and complete its tasks. Only you can share, rename or delete it.</p>
+      <div id="shareUsers">${others.length ? others.map(u => `<label class="share-user"><input type="checkbox" data-uid="${esc(u.id)}"${l.sharedWith.includes(u.id) ? ' checked' : ''}><span class="avatar sm">${esc(initials(u.name))}</span><span class="nm">${esc(u.name)}</span><span class="tag">${l.sharedWith.includes(u.id) ? 'Can edit' : ''}</span></label>`).join('')
+        : '<p>There is nobody else yet. The admin can add people in Settings.</p>'}</div>
+      <div class="row-end"><button class="btn primary" data-x="close">Done</button></div>`;
+  } else {
+    body = `<h2>${esc(l.name)}</h2><p>${IC.people.replace('<svg', '<svg style="width:16px;vertical-align:-3px"')} Shared with you by <b>${esc(l.ownerName)}</b>${l.sharedAt ? ' on ' + esc(new Date(l.sharedAt).toLocaleDateString()) : ''}. You can view and edit its tasks. Only ${esc(l.ownerName)} can share, rename or delete it.</p>
+      <div><div class="share-user"><span class="avatar sm">${esc(initials(l.ownerName))}</span><span class="nm">${esc(l.ownerName)}</span><span class="tag">Owner</span></div>
+      ${l.sharedWith.map(u => `<div class="share-user"><span class="avatar sm">${esc(initials(userName(u)))}</span><span class="nm">${u === me().id ? 'You' : esc(userName(u))}</span><span class="tag">Member</span></div>`).join('')}</div>
+      <div class="row-end"><button class="btn danger" data-x="leave">Leave list</button><button class="btn primary" data-x="close">Done</button></div>`;
+  }
+  const m = openModal(body);
+  m.querySelectorAll('input[data-uid]').forEach(cb => cb.onchange = () => {
+    mutate({ type: 'list.share', id: l.id, userId: cb.dataset.uid, shared: cb.checked });
+    cb.closest('.share-user').querySelector('.tag').textContent = cb.checked ? 'Can edit' : '';
+  });
+  m.querySelector('[data-x="close"]').onclick = closeModal;
+  const lv = m.querySelector('[data-x="leave"]'); if (lv) lv.onclick = () => leaveList(l.id);
+}
+
+/* ---------- settings / admin ---------- */
+let installEvt = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; });
+function settingsModal(extraHtml) {
+  const a = server && server.admin;
+  const notif = !('Notification' in window) ? 'Not supported in this browser' : Notification.permission === 'granted' ? 'On' : Notification.permission === 'denied' ? 'Blocked (allow it in site settings)' : 'Off';
+  const m = openModal(`<h2>Settings</h2><p>Signed in as <b>${esc(me().name)}</b>${me().isAdmin ? ' (admin)' : ''}.</p>${extraHtml || ''}
+    <div class="settings-sec"><h3>Reminders</h3>
+      <p style="margin:0 0 8px">Browser notifications: <b>${esc(notif)}</b>. They appear while Odmit is open (or recently open) on this device.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="sNotify">Turn on notifications</button><button class="btn" id="sTest">Test</button></div>
+      <div class="field" style="margin-top:12px"><label>Email reminders (optional, works even when the app is closed)</label><input id="sEmail" type="email" placeholder="you@example.com" value="${esc(me().email || '')}"></div>
+      <button class="btn" id="sEmailSave">Save email</button></div>
+    <div class="settings-sec"><h3>Change password</h3>
+      <div class="field"><input id="sOld" type="password" placeholder="Current password" autocomplete="current-password"></div>
+      <div class="field"><input id="sNew" type="password" placeholder="New password (6+ characters)" autocomplete="new-password"></div>
+      <button class="btn" id="sPw">Change password</button></div>
+    ${a ? `<div class="settings-sec"><h3>People (admin)</h3><table class="users">${a.users.map(u => `<tr><td><b>${esc(u.name)}</b>${u.isAdmin ? ' · admin' : ''}${u.pending ? `<br><small>Invite code: <span class="code" style="font-size:12px;padding:1px 6px">${esc(u.inviteCode)}</span></small>` : ''}</td>
+        <td style="text-align:right;white-space:nowrap">${u.id === me().id ? '' : `<button class="btn link" data-reset="${esc(u.id)}">Reset password</button><button class="btn link" style="color:var(--red)" data-remove="${esc(u.id)}">Remove</button>`}</td></tr>`).join('')}</table>
+      <div style="display:flex;gap:8px;margin-top:10px"><input id="sNewUser" placeholder="New person's name" maxlength="60" style="flex:1;height:32px;padding:0 8px;border:1px solid #8a8886;border-radius:4px"><button class="btn primary" id="sAdd">Add person</button></div>
+      <p style="font-size:12px">They open Odmit, choose <i>I have an invite code</i>, and set their own password.</p></div>` : ''}
+    <div class="settings-sec"><h3>This device</h3><div style="display:flex;gap:8px;flex-wrap:wrap">
+      ${installEvt ? '<button class="btn" id="sInstall">Install app</button>' : ''}<button class="btn" id="sSync">Sync now</button><button class="btn danger" id="sOut">Sign out</button></div>
+      <p style="font-size:12px;margin-top:8px">${IN_GAS ? 'Running inside Google Apps Script.' : 'Server: ' + esc(apiUrl() || 'not set')}</p></div>
+    <div class="row-end"><button class="btn primary" id="sClose">Close</button></div>`);
+  m.querySelector('#sClose').onclick = closeModal;
+  m.querySelector('#sNotify').onclick = async () => { await askNotify(true); settingsModal(); };
+  m.querySelector('#sTest').onclick = () => notify('Odmit test', 'Notifications are working.', null);
+  m.querySelector('#sEmailSave').onclick = () => { mutate({ type: 'me.update', email: m.querySelector('#sEmail').value.trim() }); toast('Email saved'); };
+  m.querySelector('#sPw').onclick = async () => {
+    const r = await adminCall({ action: 'changePassword', oldPassword: m.querySelector('#sOld').value, newPassword: m.querySelector('#sNew').value });
+    if (r) { toast('Password changed. Other devices were signed out.'); m.querySelector('#sOld').value = m.querySelector('#sNew').value = ''; }
+  };
+  m.querySelector('#sSync').onclick = () => { flush(); toast('Syncing…'); };
+  m.querySelector('#sOut').onclick = async () => {
+    if (queue.length && !(await confirmDialog('Sign out?', queue.length + ' change(s) have not reached the server yet and will be lost.', 'Sign out anyway', true))) return;
+    closeModal(); signOut(false);
+  };
+  const ins = m.querySelector('#sInstall'); if (ins) ins.onclick = () => { installEvt.prompt(); installEvt = null; closeModal(); };
+  const add = m.querySelector('#sAdd');
+  if (add) {
+    const doAdd = async () => { const name = m.querySelector('#sNewUser').value.trim(); if (!name) return; const r = await adminCall({ action: 'addUser', name }); if (r) inviteShown(r); };
+    add.onclick = doAdd; m.querySelector('#sNewUser').onkeydown = e => { if (e.key === 'Enter') doAdd(); };
+    m.querySelectorAll('[data-reset]').forEach(b => b.onclick = async () => {
+      const u = a.users.find(x => x.id === b.dataset.reset);
+      if (await confirmDialog('Reset password?', `${u.name} will be signed out and need a new invite code to set a password.`, 'Reset')) { const r = await adminCall({ action: 'resetUser', userId: u.id }); if (r) inviteShown(r); else settingsModal(); }
+      else settingsModal();
+    });
+    m.querySelectorAll('[data-remove]').forEach(b => b.onclick = async () => {
+      const u = a.users.find(x => x.id === b.dataset.remove);
+      if (await confirmDialog('Remove ' + u.name + '?', `This deletes ${u.name}'s account and all lists they own. Lists they were shared into stay.`, 'Remove', true)) { await adminCall({ action: 'removeUser', userId: u.id }); }
+      settingsModal();
+    });
+  }
+}
+function inviteShown(r) {
+  settingsModal(`<div style="background:var(--blue-l);padding:12px;border-radius:6px"><b>${esc(r.invitedName)}</b> can now join. Give them this one-time invite code:<br><span class="code" id="inviteCode" style="margin-top:6px">${esc(r.inviteCode)}</span></div>`);
+}
+async function adminCall(body) { // needs a connection
+  try {
+    const r = await rawApi(Object.assign({ token: session.token }, body));
+    if (!r.ok) { toast(r.error); if (r.code === 'AUTH') signOut(true); return null; }
+    if (r.lists) { const keep = Object.assign({}, r); delete keep.ok; delete keep.inviteCode; delete keep.invitedName; server = keep; rebuild(); saveLocal(); render(); }
+    return r;
+  } catch (e) { toast('You need to be online for that.'); return null; }
+}
+
+/* ---------- reminders & notifications ---------- */
+async function askNotify(explicit) {
+  if (!('Notification' in window)) { if (explicit) toast('This browser does not support notifications'); return; }
+  if (Notification.permission === 'default') { try { await Notification.requestPermission(); } catch (e) {} }
+  else if (explicit && Notification.permission === 'denied') toast('Notifications are blocked. Allow them in the browser\'s site settings.');
+}
+async function notify(title, body, taskId) {
+  toast('🔔 ' + title, taskId ? { label: 'Open', fn: () => openTask(taskId) } : null, 'reminder', 15000);
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const opts = { body, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', tag: taskId || 'test', data: { taskId }, requireInteraction: true };
+  try { // Android Chrome only allows notifications through the service worker
+    const reg = navigator.serviceWorker && await Promise.race([navigator.serviceWorker.getRegistration(), new Promise(r => setTimeout(r, 1000))]);
+    if (reg) return reg.showNotification(title, opts);
+  } catch (e) {}
+  try { new Notification(title, opts); } catch (e) {}
+}
+function checkReminders() {
+  if (!st) return;
+  const done = LS.get('notified', {}), now = Date.now();
+  st.tasks.forEach(t => {
+    if (!t.reminderAt || t.completed) return;
+    const at = Date.parse(t.reminderAt), key = t.id + '@' + t.reminderAt;
+    if (at <= now && !done[key]) {
+      done[key] = now;
+      if (now - at < 24 * 3600e3) notify(t.title, (t.dueDate ? 'Due ' + dueLabel(t.dueDate) + ' · ' : '') + (listOf(t) || {}).name, t.id);
+    }
+  });
+  Object.keys(done).forEach(k => { if (now - done[k] > 30 * 864e5) delete done[k]; });
+  LS.set('notified', done);
+}
+setInterval(checkReminders, 15000);
+function openTask(id) { const t = st && st.tasks.find(x => x.id === id); if (!t) return; ui.selected = id; if (!tasksFor(viewInfo()).includes(t)) { ui.view = listOf(t).isInbox && listOf(t).ownerId === me().id ? 'inbox' : t.listId; } render(); }
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.type === 'open-task') openTask(e.data.taskId); });
+/* ---------- events ---------- */
+document.addEventListener('click', e => {
+  if (dragJustEnded) { e.preventDefault(); e.stopPropagation(); return; }
+  const el = e.target.closest('[data-act]'); if (!el || el.closest('.menu')) return;
+  const id = el.dataset.id, act = el.dataset.act;
+  if (!act) return;
+  e.stopPropagation();
+  switch (act) {
+    case 'nav': go(id); break;
+    case 'toggleNav': document.body.classList.toggle('nav-open'); break;
+    case 'closeNav': document.body.classList.remove('nav-open'); break;
+    case 'toggle': toggleTask(id); break;
+    case 'star': { const t = st.tasks.find(x => x.id === id); upd(id, { important: !t.important }); break; }
+    case 'open': ui.selected = id; render(); break;
+    case 'closeDetail': ui.selected = null; render(); break;
+    case 'collapse': ui.collapsed[el.dataset.key] = !ui.collapsed[el.dataset.key]; LS.set('collapsed', ui.collapsed); renderMain(); break;
+    case 'groupToggle': ui.groupCollapsed[el.dataset.gid] = !ui.groupCollapsed[el.dataset.gid]; LS.set('gcollapsed', ui.groupCollapsed); renderNav(); break;
+    case 'groupMenu': groupMenu(el, el.dataset.gid); break;
+    case 'addTask': addTask($('#addInput').value); $('#addInput').value = ''; $('#addBtn').classList.add('hidden'); $('#addInput').focus(); break;
+    case 'newList': newList(); break;
+    case 'newGroup': newGroup(); break;
+    case 'share': shareModal(viewInfo().id); break;
+    case 'sortMenu': sortMenu(el); break;
+    case 'sortDir': setPrefs(p => { const s = p.sort[sortKeyFor(viewInfo())]; s.dir = s.dir === 'desc' ? 'asc' : 'desc'; }); break;
+    case 'sortClear': setPrefs(p => { delete p.sort[sortKeyFor(viewInfo())]; }); break;
+    case 'listMenu': listMenu(el); break;
+    case 'settings': settingsModal(); break;
+    case 'myDayOn': upd(ui.selected, { myDay: today() }); break;
+    case 'myDayOff': upd(ui.selected, { myDay: '' }); break;
+    case 'remindMenu': remindMenu(el); break;
+    case 'remindClear': upd(ui.selected, { reminderAt: '' }); break;
+    case 'dueMenu': dueMenu(el); break;
+    case 'dueClear': upd(ui.selected, { dueDate: '' }); break;
+    case 'repeatMenu': repeatMenu(el); break;
+    case 'repeatClear': upd(ui.selected, { repeat: null }); break;
+    case 'deleteTask': deleteTask(ui.selected); break;
+    case 'stepToggle': { const t = selTask(), s = stepsOf(t); s[+el.dataset.i].done = !s[+el.dataset.i].done; upd(t.id, { steps: s }); renderDetail(true); break; }
+    case 'stepDel': { const t = selTask(), s = stepsOf(t); s.splice(+el.dataset.i, 1); upd(t.id, { steps: s }); renderDetail(true); break; }
+  }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { if ($('.menu')) return closeMenu(); if ($('#modalBack')) return closeModal(); if (ui.selected) { ui.selected = null; render(); } }
+  const tg = e.target;
+  if (e.key === 'Enter' && !e.shiftKey) {
+    if (tg.id === 'addInput') { addTask(tg.value); tg.value = ''; $('#addBtn').classList.add('hidden'); }
+    else if (tg.id === 'viewTitle' || tg.id === 'dTitle' || tg.dataset.step != null) { e.preventDefault(); tg.blur(); }
+    else if (tg.id === 'dAddStep' && tg.value.trim()) {
+      const t = selTask(), s = stepsOf(t); s.push({ id: uid('s'), title: tg.value.trim().slice(0, 500), done: false });
+      upd(t.id, { steps: s }); renderDetail(true); $('#dAddStep').focus();
+    }
+  }
+});
+document.addEventListener('input', e => {
+  if (!st) return;
+  if (e.target.id === 'addInput') $('#addBtn').classList.toggle('hidden', !e.target.value.trim());
+  if (e.target.id === 'search') { ui.search = e.target.value.trim(); ui.selected = null; renderMain(); renderNav(); renderDetail(); }
+  if (e.target.id === 'dTitle') autoGrow(e.target);
+});
+document.addEventListener('focusout', e => {
+  if (!st) return;
+  const tg = e.target, t = selTask();
+  if (tg.id === 'viewTitle' && !tg.readOnly) { renameList(viewInfo().id, tg.value); if (!tg.value.trim()) tg.value = viewInfo().name; }
+  if (!t) return;
+  if (tg.id === 'dTitle') { const v = tg.value.replace(/\s+/g, ' ').trim(); if (v && v !== t.title) upd(t.id, { title: v }); else tg.value = t.title; }
+  if (tg.id === 'dNotes' && tg.value !== t.notes) upd(t.id, { notes: tg.value });
+  if (tg.dataset && tg.dataset.step != null) { const s = stepsOf(t), i = +tg.dataset.step, v = tg.value.trim(); if (s[i] && v && v !== s[i].title) { s[i].title = v; upd(t.id, { steps: s }); } }
+});
+document.addEventListener('change', e => {
+  const t = selTask(); if (!t) return;
+  if (e.target.id === 'dList' && e.target.value !== t.listId) { upd(t.id, { listId: e.target.value }); toast('Moved to ' + (st.lists.find(l => l.id === e.target.value) || {}).name); }
+  if (e.target.id === 'dAssign') upd(t.id, { assignedTo: e.target.value });
+});
+
+/* ---------- drag & drop (mouse: drag; touch: long-press then drag) ---------- */
+let drag = null, dragJustEnded = false;
+document.addEventListener('pointerdown', e => {
+  if (e.button !== 0) return;
+  const src = e.target.closest('[data-drag]');
+  if (!src || e.target.closest('button:not([data-drag]),input,textarea,select')) return;
+  drag = { src, kind: src.dataset.drag, id: src.dataset.tid || src.dataset.lid, x: e.clientX, y: e.clientY, pid: e.pointerId, touch: e.pointerType !== 'mouse', active: false };
+  if (drag.touch) drag.timer = setTimeout(() => { if (drag) { startDrag(); if (navigator.vibrate) navigator.vibrate(15); } }, 380);
+});
+document.addEventListener('pointermove', e => {
+  if (!drag || e.pointerId !== drag.pid) return;
+  const dist = Math.hypot(e.clientX - drag.x, e.clientY - drag.y);
+  if (!drag.active) {
+    if (drag.touch) { if (dist > 10) { clearTimeout(drag.timer); drag = null; } return; } // it's a scroll
+    if (dist < 6) return;
+    startDrag();
+  }
+  e.preventDefault(); moveDrag(e.clientX, e.clientY);
+}, { passive: false });
+document.addEventListener('touchmove', e => { if (drag && drag.active) e.preventDefault(); }, { passive: false });
+document.addEventListener('contextmenu', e => { if (drag) e.preventDefault(); });
+const endPointer = e => {
+  if (!drag) return;
+  clearTimeout(drag.timer);
+  if (drag.active) { finishDrag(); dragJustEnded = true; setTimeout(() => dragJustEnded = false, 0); }
+  drag = null;
+};
+document.addEventListener('pointerup', endPointer);
+document.addEventListener('pointercancel', e => { if (drag && !drag.active) { clearTimeout(drag.timer); drag = null; } else endPointer(e); });
+function startDrag() {
+  drag.active = true;
+  const r = drag.src.getBoundingClientRect();
+  const g = drag.src.cloneNode(true); g.className += ' drag-ghost'; g.style.width = r.width + 'px'; g.style.left = r.left + 'px'; g.style.top = r.top + 'px';
+  drag.ox = drag.x - r.left; drag.oy = drag.y - r.top; drag.ghost = g; document.body.appendChild(g);
+  drag.src.classList.add('dragging');
+  if (drag.kind === 'task' && matchMedia('(max-width:767px)').matches) { /* keep sidebar closed on phones */ }
+}
+function clearMarks() { document.querySelectorAll('.drop-before,.drop-into').forEach(x => x.classList.remove('drop-before', 'drop-into')); }
+function moveDrag(x, y) {
+  drag.ghost.style.left = (x - drag.ox) + 'px'; drag.ghost.style.top = (y - drag.oy) + 'px';
+  clearMarks(); drag.target = null;
+  const el = document.elementFromPoint(x, y); if (!el) return;
+  const v = viewInfo();
+  if (drag.kind === 'task') {
+    const row = el.closest('.task[data-tid]');
+    const manual = (v.kind === 'list' || v.id === 'inbox' || v.id === 'myday' || v.id === 'important') && !(prefs().sort || {})[sortKeyFor(v)];
+    if (row && row.dataset.tid !== drag.id && manual) {
+      const r = row.getBoundingClientRect(), after = y > r.top + r.height / 2;
+      drag.target = { type: 'task', id: row.dataset.tid, after };
+      if (after) { const nx = row.nextElementSibling; if (nx && nx.classList.contains('task')) nx.classList.add('drop-before'); else row.style.boxShadow = 'inset 0 -2px 0 var(--blue)'; } else row.classList.add('drop-before');
+      drag.markRow = row; return;
+    }
+    const nav = el.closest('[data-drop]');
+    if (nav && !nav.dataset.drop.startsWith('group:') && nav.dataset.drop !== 'planned' && nav.dataset.drop !== 'assigned') { nav.classList.add('drop-into'); drag.target = { type: 'nav', id: nav.dataset.drop }; }
+  } else {
+    const nav = el.closest('[data-drop]');
+    if (!nav || nav.dataset.drop === drag.id) return;
+    const d = nav.dataset.drop;
+    if (d.startsWith('group:')) { if (drag.kind === 'list') { nav.classList.add('drop-into'); drag.target = { type: 'group', id: d.slice(6) }; } else { nav.classList.add('drop-before'); drag.target = { type: 'before', id: d.slice(6) }; } return; }
+    if (SMART.some(s => s.id === d)) return;
+    nav.classList.add('drop-before'); drag.target = { type: 'before', id: d };
+  }
+}
+function finishDrag() {
+  drag.ghost.remove(); drag.src.classList.remove('dragging'); clearMarks();
+  if (drag.markRow) drag.markRow.style.boxShadow = '';
+  const tg = drag.target; if (!tg) return;
+  if (drag.kind === 'task') {
+    const t = st.tasks.find(x => x.id === drag.id); if (!t) return;
+    if (tg.type === 'task') {
+      const v = viewInfo();
+      const open = sortTasks(tasksFor(v), v).filter(x => !x.completed && x.id !== t.id);
+      const i = open.findIndex(x => x.id === tg.id); if (i < 0) return;
+      const at = tg.after ? i + 1 : i, prev = open[at - 1], next = open[at];
+      const order = prev && next ? (prev.order + next.order) / 2 : prev ? prev.order + 1000 : next ? next.order - 1000 : 0;
+      upd(t.id, { order });
+    } else if (tg.type === 'nav') {
+      if (tg.id === 'myday') { upd(t.id, { myDay: today() }); toast('Added to My Day'); }
+      else if (tg.id === 'important') upd(t.id, { important: true });
+      else { const lid = tg.id === 'inbox' ? inbox().id : tg.id; if (lid !== t.listId) { upd(t.id, { listId: lid }); toast('Moved to ' + (st.lists.find(l => l.id === lid) || {}).name); } }
+    }
+    return;
+  }
+  // reorder lists / groups in the sidebar (stored per person)
+  const flat = []; navOrder().forEach(it => { if (it.type === 'group') { flat.push(it.g.id); it.lists.forEach(l => flat.push(l.id)); } else flat.push(it.l.id); });
+  const lg = Object.assign({}, prefs().listGroup || {}), id = drag.id;
+  let order = flat.filter(x => x !== id), targetGroup = null;
+  if (tg.type === 'group') {
+    targetGroup = tg.id;
+    const members = order.filter(x => lg[x] === tg.id), lastIdx = members.length ? order.indexOf(members[members.length - 1]) : order.indexOf(tg.id);
+    order.splice(lastIdx + 1, 0, id);
+  } else {
+    let before = tg.id;
+    if (drag.kind === 'group' && lg[before]) before = lg[before]; // groups only sit at top level
+    targetGroup = drag.kind === 'list' ? (lg[before] || null) : null;
+    order.splice(Math.max(0, order.indexOf(before)), 0, id);
+  }
+  setPrefs(p => { p.order = order; if (drag.kind === 'list') { p.listGroup = p.listGroup || {}; if (targetGroup) p.listGroup[id] = targetGroup; else delete p.listGroup[id]; } });
+}
+
+/* ---------- sign-in ---------- */
+function authCard(mode, msg) {
+  const a = $('#auth'), c = $('#authCard'); a.classList.remove('hidden'); $('#app').classList.add('hidden');
+  const logo = '<div class="logo"><img src="icons/icon-192.png" alt="" onerror="this.remove()">Odmit</div>';
+  const urlLink = IN_GAS ? '' : '<button class="btn link" data-m="url">Server settings</button>';
+  if (mode === 'url') c.innerHTML = logo + `<h2>Connect to your server</h2><p>Paste the Web app URL from Apps Script (it ends in <b>/exec</b>).</p>
+    <div class="field"><label for="aUrl">Server URL</label><input id="aUrl" value="${esc(apiUrl())}" placeholder="https://script.google.com/macros/s/…/exec"></div>
+    <div class="err">${esc(msg || '')}</div><div class="row-end"><button class="btn primary" id="aGo">Connect</button></div>`;
+  else if (mode === 'setup') c.innerHTML = logo + `<h2>Create the admin account</h2><p>You're the first person here, so you'll be the admin. You can add other people afterwards.</p>
+    <div class="field"><label for="aName">Your name</label><input id="aName" autocomplete="username" maxlength="60"></div>
+    <div class="field"><label for="aPw">Password</label><input id="aPw" type="password" autocomplete="new-password"></div>
+    <div class="field"><label for="aPw2">Confirm password</label><input id="aPw2" type="password" autocomplete="new-password"></div>
+    <div class="err">${esc(msg || '')}</div><div class="row-end"><button class="btn primary" id="aGo">Create account</button></div><div class="alt">${urlLink}</div>`;
+  else if (mode === 'claim') c.innerHTML = logo + `<h2>Join with an invite code</h2><p>Your admin gave you a one-time code. Choose your password.</p>
+    <div class="field"><label for="aName">Your name (as the admin typed it)</label><input id="aName" autocomplete="username" maxlength="60"></div>
+    <div class="field"><label for="aCode">Invite code</label><input id="aCode" autocapitalize="characters" autocomplete="one-time-code"></div>
+    <div class="field"><label for="aPw">New password (6+ characters)</label><input id="aPw" type="password" autocomplete="new-password"></div>
+    <div class="field"><label for="aPw2">Confirm password</label><input id="aPw2" type="password" autocomplete="new-password"></div>
+    <div class="err">${esc(msg || '')}</div><div class="row-end"><button class="btn primary" id="aGo">Set password &amp; sign in</button></div>
+    <div class="alt"><button class="btn link" data-m="login">I already have a password</button>${urlLink}</div>`;
+  else c.innerHTML = logo + `<h2>Sign in</h2>
+    <div class="field"><label for="aName">Name</label><input id="aName" autocomplete="username" maxlength="60"></div>
+    <div class="field"><label for="aPw">Password</label><input id="aPw" type="password" autocomplete="current-password"></div>
+    <div class="err">${esc(msg || '')}</div><div class="row-end"><button class="btn primary" id="aGo">Sign in</button></div>
+    <div class="alt"><button class="btn link" data-m="claim">I have an invite code</button>${urlLink}</div>`;
+  c.querySelectorAll('[data-m]').forEach(b => b.onclick = () => authCard(b.dataset.m));
+  const go = $('#aGo'), val = id => (c.querySelector('#' + id) || {}).value || '';
+  const err = m => { c.querySelector('.err').textContent = m; go.disabled = false; };
+  c.querySelectorAll('input').forEach(i => i.onkeydown = e => { if (e.key === 'Enter') go.click(); });
+  const f = c.querySelector('input'); if (f) f.focus();
+  go.onclick = async () => {
+    go.disabled = true;
+    if (mode === 'url') { const u = val('aUrl').trim(); if (!/^https?:\/\//.test(u)) return err('That does not look like a URL'); LS.set('api', u); return start(); }
+    if ((mode === 'setup' || mode === 'claim') && val('aPw') !== val('aPw2')) return err('Passwords do not match');
+    const body = mode === 'setup' ? { action: 'setup', name: val('aName'), password: val('aPw') } : mode === 'claim' ? { action: 'claim', name: val('aName'), code: val('aCode'), password: val('aPw') } : { action: 'login', name: val('aName'), password: val('aPw') };
+    try {
+      const r = await rawApi(body);
+      if (!r.ok) return err(r.error);
+      signedIn(r);
+    } catch (e) { err(e.message === 'NO_URL' ? 'Set the server URL first' : "Can't reach the server. Check your connection and the server URL."); }
+  };
+}
+function signedIn(r) {
+  session = { token: r.token, userId: r.me.id, name: r.me.name }; LS.set('session', session);
+  delete r.token; delete r.ok; server = r;
+  queue = LS.get('queue.' + session.userId, []); // keep changes made before a session expired
+  rebuild(); saveLocal(); showApp(); if (queue.length) flush();
+}
+function signOut(expired) {
+  if (!expired && session) { rawApi({ action: 'logout', token: session.token }).catch(() => {}); LS.del('server.' + session.userId); LS.del('queue.' + session.userId); LS.del('notified'); }
+  session = null; server = null; st = null; queue = []; LS.del('session'); ui.selected = null;
+  authCard('login', expired ? 'Please sign in again.' : '');
+}
+function showApp() {
+  $('#auth').classList.add('hidden'); $('#app').classList.remove('hidden');
+  if (qs.get('view')) ui.view = qs.get('view');
+  render(); checkReminders();
+  if (qs.get('task')) openTask(qs.get('task'));
+}
+async function start() {
+  if (session) { loadLocal(); showApp(); flush(); return; }
+  if (!IN_GAS && !apiUrl()) return authCard('url');
+  try { const r = await rawApi({ action: 'status' }); authCard(r.needsSetup ? 'setup' : 'login'); }
+  catch (e) { authCard(IN_GAS ? 'login' : 'url', "Can't reach the server. Check the URL and your connection."); }
+}
+if ('serviceWorker' in navigator && !IN_GAS && /^https?:$/.test(location.protocol)) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+start();
+</script>
+</body>
+</html>
