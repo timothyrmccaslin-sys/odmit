@@ -347,6 +347,19 @@ html[data-theme="light"] .tchip{color:color-mix(in srgb,var(--tc,var(--blue)) 62
 /* =====================================================================  Odmit
    Set your Apps Script web app URL here (ends in /exec), or paste it on the sign-in screen. */
 const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbyAFnjgWCnFnoJi9VzuI5sxNmo0yJp36bKil3p1bWghOvqChoIeFvo3MHfXX9zCBq7oxQ/exec';
+/* =====================================================================  PUSH NOTIFICATIONS (Firebase Cloud Messaging)
+   Public by design (a Firebase web config and the VAPID *public* key are meant to ship in web pages).
+   Push is off when FIREBASE_CONFIG is {} or VAPID_KEY is '' - the app then works exactly as before. */
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyCjzU09StzG0W2SiVSmk0psQM0nA1MMlYM',
+  authDomain: 'odmit-notifications.firebaseapp.com',
+  projectId: 'odmit-notifications',
+  storageBucket: 'odmit-notifications.firebasestorage.app',
+  messagingSenderId: '608126089276',
+  appId: '1:608126089276:web:5da424b3d8ac66a526eb39',
+};
+const VAPID_KEY = 'BLBej9x9WtmiX3-6MAivThRNKkohDfQHSHnFEbhhML57ZrM0TlIQtkNvXCvCUPEGC4lZNJfwG5kanlyv28lA1dI';
+const FIREBASE_SDK = 'https://www.gstatic.com/firebasejs/13.1.0/'; // loaded only when push is used
 /* ===================================================================== */
 
 const $ = s => document.querySelector(s);
@@ -610,6 +623,7 @@ const prefs = () => st.me.prefs || {};
 function setPrefs(fn) { const p = JSON.parse(JSON.stringify(prefs())); fn(p); mutate({ type: 'prefs.set', prefs: p }); }
 // Server feature level. Version 2 adds tags and list icon/color; an older Code.gs just doesn't know those changes.
 const V2 = () => !!(server && server.apiVersion >= 2);
+const V3 = () => !!(server && server.apiVersion >= 3); // 3 = push notifications
 const OLD_SERVER = () => !!(server && !(server.apiVersion >= 2));
 const safeColor = c => /^#[0-9a-f]{6}$/i.test(c || '') ? c.toLowerCase() : '';
 const tagById = id => st.tags.find(g => g.id === id);
@@ -1307,12 +1321,15 @@ window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); instal
 function settingsModal(extraHtml) {
   const a = server && server.admin;
   const notif = !('Notification' in window) ? 'Not supported in this browser' : Notification.permission === 'granted' ? 'On' : Notification.permission === 'denied' ? 'Blocked (allow it in site settings)' : 'Off';
+  const ps = pushState(), pushOn = ps === 'on';
   const m = openModal(`<h2>Settings</h2><p>Signed in as <b>${esc(me().name)}</b>${me().isAdmin ? ' (admin)' : ''}.</p>${extraHtml || ''}
     <div class="settings-sec"><h3>Appearance</h3><div class="seg" id="sTheme" role="group" aria-label="Theme">${[['light', 'sun', 'Light'], ['dark', 'moon', 'Dark'], ['system', 'monitor', 'System']].map(([v, i, l]) => `<button data-theme="${v}" aria-pressed="${window.odmitTheme.get() === v}">${IC[i]}${l}</button>`).join('')}</div>
       <p style="font-size:12px;margin:6px 0 0">Saved on this device only.</p></div>
     <div class="settings-sec"><h3>Reminders</h3>
-      <p style="margin:0 0 8px">Browser notifications: <b>${esc(notif)}</b>. They appear while Odmit is open (or recently open) on this device.</p>
-      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="sNotify">Turn on notifications</button><button class="btn" id="sTest">Test</button></div>
+      <p style="margin:0 0 8px">Browser notifications: <b>${esc(notif)}</b>.${pushOn ? '' : ' They appear while Odmit is open (or recently open) on this device.'}</p>
+      ${ps ? `<p style="margin:0 0 8px" id="sPush" data-state="${ps}">When Odmit is closed: <b>${esc(PUSH_TEXT[ps])}</b><span id="sPushDevices"></span></p>` : ''}
+      <div style="display:flex;gap:8px;flex-wrap:wrap">${pushOn ? '<button class="btn" id="sPushOff">Turn off on this device</button>' : '<button class="btn" id="sNotify">Turn on notifications</button>'}<button class="btn" id="sTest">Test</button>${ps && a ? '<button class="btn link" id="sPushCheck">Check server setup</button>' : ''}</div>
+      <div id="sPushCheckOut" style="font-size:12px;margin-top:6px"></div>
       <div class="field" style="margin-top:12px"><label>Email reminders (optional, works even when the app is closed)</label><input id="sEmail" type="email" placeholder="you@example.com" value="${esc(me().email || '')}"></div>
       <button class="btn" id="sEmailSave">Save email</button></div>
     <div class="settings-sec"><h3>Change password</h3>
@@ -1329,8 +1346,31 @@ function settingsModal(extraHtml) {
     <div class="row-end"><button class="btn primary" id="sClose">Close</button></div>`);
   m.querySelector('#sClose').onclick = closeModal;
   m.querySelectorAll('#sTheme button').forEach(b => b.onclick = () => { window.odmitTheme.set(b.dataset.theme); m.querySelectorAll('#sTheme button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); });
-  m.querySelector('#sNotify').onclick = async () => { await askNotify(true); settingsModal(); };
-  m.querySelector('#sTest').onclick = () => notify('Odmit test', 'Notifications are working.', null);
+  const sn = m.querySelector('#sNotify');
+  if (sn) sn.onclick = async () => { if (pushAvailable()) { sn.disabled = true; sn.textContent = 'Turning on…'; await enablePush(); } else await askNotify(true); if ($('#sClose')) settingsModal(); };
+  const so = m.querySelector('#sPushOff');
+  if (so) so.onclick = async () => { so.disabled = true; await disablePush(true); toast('Push turned off on this device'); if ($('#sClose')) settingsModal(); };
+  m.querySelector('#sTest').onclick = async () => {
+    if (!pushOn) return notify('Odmit test', 'Notifications are working.', null);
+    try { const r = await rawApi({ action: 'push.test', token: session.token, deviceId: deviceId() });
+      toast(r.ok ? 'Test sent. It should arrive in a few seconds, even with Odmit closed.' : 'Push test failed: ' + r.error);
+    } catch (e) { toast('You need to be online for that.'); }
+  };
+  const pc = m.querySelector('#sPushCheck');
+  if (pc) pc.onclick = async () => {
+    const out = m.querySelector('#sPushCheckOut'); out.textContent = 'Checking…';
+    try { const r = await rawApi({ action: 'push.status', token: session.token, deviceId: deviceId(), check: true });
+      const sv = r.server || {}, c = sv.check || {};
+      out.innerHTML = !r.ok ? esc(r.error) : (c.ok ? '✅ Server can send pushes (FCM accepted its credentials).' : '❌ ' + esc((c.http ? 'HTTP ' + c.http + ' ' : '') + (c.message || 'FCM check failed')) + (c.hint ? '<br>' + esc(c.hint) : '')) +
+        `<br>Trigger: ${sv.trigger ? 'installed' : 'not installed yet (it installs on the first device registration)'}` + (sv.lastOkAt ? ' · last push sent ' + esc(new Date(sv.lastOkAt).toLocaleString()) : '') +
+        (sv.lastError ? '<br>Last error: ' + esc(sv.lastError.message) + ' (' + esc(new Date(sv.lastError.at).toLocaleString()) + ')' : '');
+    } catch (e) { out.textContent = 'You need to be online for that.'; }
+  };
+  if (pushOn) rawApi({ action: 'push.status', token: session.token, deviceId: deviceId() }).then(r => {
+    const el = m.querySelector('#sPushDevices'); if (!el || !r.ok) return;
+    if (!r.thisDevice) { pushForgotten(); return; } // the server dropped this device (dead token / expired login): new token
+    el.textContent = ' · ' + r.devices + (r.devices === 1 ? ' device' : ' devices');
+  }).catch(() => {});
   m.querySelector('#sEmailSave').onclick = () => { mutate({ type: 'me.update', email: m.querySelector('#sEmail').value.trim() }); toast('Email saved'); };
   m.querySelector('#sPw').onclick = async () => {
     const r = await adminCall({ action: 'changePassword', oldPassword: m.querySelector('#sOld').value, newPassword: m.querySelector('#sNew').value });
@@ -1401,8 +1441,84 @@ function checkReminders() {
   LS.set('notified', done);
 }
 setInterval(checkReminders, 15000);
+
+/* ---------- push notifications (work even when Odmit is closed) ----------
+   Flow: permission -> Firebase getToken() with OUR service worker (sw.js shows the notification) -> push.register.
+   The server's 1-minute trigger sends each reminder to the devices of the person who set it. */
+const PUSH_CONFIGURED = !!(FIREBASE_CONFIG && FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.projectId && FIREBASE_CONFIG.messagingSenderId && FIREBASE_CONFIG.appId && VAPID_KEY);
+const PUSH_TEXT = { on: 'On for this device', off: 'Off', blocked: 'Blocked (allow notifications in site settings)',
+  server: 'Needs the server update (Code.gs v3)', unsupported: /iPhone|iPad/.test(navigator.userAgent) ? 'Add Odmit to your Home Screen first (Share → Add to Home Screen), then open it from there' : 'Not available in this browser' };
+const pushSupported = () => !IN_GAS && window.isSecureContext && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const pushAvailable = () => PUSH_CONFIGURED && pushSupported() && V3() && !!(server.push && server.push.configured);
+const pushKey = () => 'push.' + session.userId; // {token, at}: this device is registered for this person
+function pushState() { // '' = push not configured in this build: Settings looks exactly as before
+  if (!PUSH_CONFIGURED || IN_GAS) return '';
+  if (!pushSupported()) return 'unsupported';
+  if (!pushAvailable()) return 'server';
+  if (Notification.permission === 'denied') return 'blocked';
+  return Notification.permission === 'granted' && LS.get(pushKey(), null) ? 'on' : 'off';
+}
+function deviceId() { let d = LS.get('deviceId', ''); if (!/^[A-Za-z0-9_-]{8,64}$/.test(d)) { d = uid('d_'); LS.set('deviceId', d); } return d; }
+function deviceLabel() {
+  const u = navigator.userAgent;
+  return (/Android/.test(u) ? 'Android' : /iPhone|iPad/.test(u) ? 'iOS' : /Windows/.test(u) ? 'Windows' : /Mac/.test(u) ? 'Mac' : /Linux/.test(u) ? 'Linux' : 'Device') + ' ' +
+    (/Edg\//.test(u) ? 'Edge' : /Firefox\//.test(u) ? 'Firefox' : /Chrome\//.test(u) ? 'Chrome' : /Safari\//.test(u) ? 'Safari' : 'browser');
+}
+let fbMessaging = null;
+function messaging() { // the Firebase SDK is only downloaded when push is actually used
+  if (!fbMessaging) fbMessaging = Promise.all([import(FIREBASE_SDK + 'firebase-app.js'), import(FIREBASE_SDK + 'firebase-messaging.js')])
+    .then(([app, fm]) => ({ fm, m: fm.getMessaging(app.getApps().find(a => a.name === 'odmit') || app.initializeApp(FIREBASE_CONFIG, 'odmit')) }))
+    .catch(e => { fbMessaging = null; throw e; });
+  return fbMessaging;
+}
+const withTimeout = (p, ms, msg) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), ms))]);
+async function fcmToken() {
+  const { fm, m } = await withTimeout(messaging(), 20000, 'Could not load Firebase (are you online?)');
+  const reg = await withTimeout(navigator.serviceWorker.ready, 10000, 'The offline helper (service worker) is not ready yet. Reload and try again.');
+  return withTimeout(fm.getToken(m, { vapidKey: VAPID_KEY, serviceWorkerRegistration: reg }), 20000, 'Firebase did not answer');
+}
+async function pushRegister() {
+  const sess = session, token = await fcmToken();
+  if (!token) throw new Error('No push token');
+  const r = await rawApi({ action: 'push.register', token: sess.token, pushToken: token, deviceId: deviceId(), device: deviceLabel() });
+  if (!r.ok) { if (r.code === 'AUTH') signOut(true); throw new Error(r.error); }
+  if (session === sess) { LS.set(pushKey(), { token, at: Date.now() }); LS.del('pushOff.' + sess.userId); }
+  return r;
+}
+async function enablePush() { // from "Turn on notifications"
+  await askNotify(true);
+  if (!('Notification' in window) || Notification.permission !== 'granted') return false;
+  try { await pushRegister(); toast('Notifications are on. Reminders arrive even when Odmit is closed.'); return true; }
+  catch (e) { toast('Couldn\'t turn on push: ' + (e && e.message || e)); return false; }
+}
+async function disablePush(byUser, sess) { // byUser: remember not to turn it back on automatically
+  sess = sess || session; if (!sess) return;
+  const p = LS.get('push.' + sess.userId, null); LS.del('push.' + sess.userId);
+  if (byUser) LS.set('pushOff.' + sess.userId, 1);
+  if (pushAvailable() || p) await rawApi({ action: 'push.unregister', token: sess.token, pushToken: p ? p.token : '', deviceId: deviceId() }).catch(() => {});
+  if (p && PUSH_CONFIGURED) { try { const { fm, m } = await withTimeout(messaging(), 8000, 'timeout'); await fm.deleteToken(m); } catch (e) {} }
+}
+async function refreshPush() { // on start: register if notifications are allowed, and keep the token fresh (FCM rotates tokens)
+  if (!session || !pushAvailable() || Notification.permission !== 'granted' || LS.get('pushOff.' + session.userId, 0)) return;
+  const p = LS.get(pushKey(), null);
+  try {
+    const token = await fcmToken();
+    if (token && (!p || token !== p.token || Date.now() - p.at > 7 * 864e5)) return void await pushRegister();
+    if (p && Date.now() - LS.get('pushChecked', 0) > 12 * 3600e3) { // does the server still have this device?
+      LS.set('pushChecked', Date.now());
+      const r = await rawApi({ action: 'push.status', token: session.token, deviceId: deviceId() });
+      if (r.ok && !r.thisDevice) await pushForgotten();
+    }
+  } catch (e) {}
+}
+async function pushForgotten() { // FCM said the old token is dead (or the login it belonged to ended): get a new one
+  if (!session) return;
+  LS.del(pushKey());
+  try { const { fm, m } = await withTimeout(messaging(), 8000, 'timeout'); await fm.deleteToken(m); } catch (e) {}
+  return refreshPush();
+}
 function openTask(id) { const t = st && st.tasks.find(x => x.id === id); if (!t) return; ui.selected = id; if (!tasksFor(viewInfo()).includes(t)) { ui.view = listOf(t).isInbox && listOf(t).ownerId === me().id ? 'inbox' : t.listId; } render(); }
-if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.type === 'open-task') openTask(e.data.taskId); });
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => { if (!e.data) return; if (e.data.type === 'open-task') openTask(e.data.taskId); else if (e.data.type === 'push' && session) flush(); });
 /* ---------- events ---------- */
 document.addEventListener('click', e => {
   if (dragJustEnded) { e.preventDefault(); e.stopPropagation(); return; }
@@ -1643,7 +1759,11 @@ function signedIn(r) {
   rebuild(); saveLocal(); showApp(); if (queue.length) flush();
 }
 function signOut(expired) {
-  if (!expired && session) { rawApi({ action: 'logout', token: session.token }).catch(() => {}); LS.del('server.' + session.userId); LS.del('queue.' + session.userId); LS.del('notified'); }
+  if (session) { // stop pushes to this device first (the server also drops a device when its login ends)
+    const sess = session, off = disablePush(false, sess).catch(() => {});
+    if (!expired) off.then(() => rawApi({ action: 'logout', token: sess.token })).catch(() => {});
+  }
+  if (!expired && session) { LS.del('server.' + session.userId); LS.del('queue.' + session.userId); LS.del('notified'); }
   session = null; server = null; st = null; queue = []; LS.del('session'); ui.selected = null;
   authCard('login', expired ? 'Please sign in again.' : '');
 }
@@ -1652,6 +1772,7 @@ function showApp() {
   if (qs.get('view')) ui.view = qs.get('view');
   render(); checkReminders();
   if (qs.get('task')) openTask(qs.get('task'));
+  setTimeout(refreshPush, 2500);
 }
 async function start() {
   if (session) { loadLocal(); showApp(); flush(); return; }

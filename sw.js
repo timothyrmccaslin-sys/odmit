@@ -1,6 +1,8 @@
-// Odmit service worker: offline app shell + notification clicks.
+// Odmit service worker: offline app shell + push reminders (Firebase Cloud Messaging) + notification clicks.
+// One service worker for everything: the app passes this registration to Firebase's getToken(), so no
+// firebase-messaging-sw.js is needed and no Firebase code runs here (works offline, nothing to download).
 // API calls (to script.google.com) are never cached here; the app keeps its own offline copy of your data.
-const CACHE = 'odmit-v5'; // v2: Myna UI icons, dark theme, tags, list icons & colors
+const CACHE = 'odmit-v6'; // v6: push notifications
 // Big picker data (full Myna UI icon set, emoji list): fetched lazily by the app, pre-cached here in the background for offline use.
 const LAZY = ['./myna-icons-outline.json', './myna-icons-solid.json', './emoji.json'];
 const SHELL = ['./', './index.html', './manifest.json', './icons/icon-192.png', './icons/icon-512.png',
@@ -34,4 +36,22 @@ self.addEventListener('notificationclick', e => {
     for (const c of list) { if ('focus' in c) { c.postMessage({ type: 'open-task', taskId }); return c.focus(); } }
     return self.clients.openWindow(url);
   }));
+});
+
+// Push from FCM. The server sends data-only messages: {data: {type, taskId, title, body, tag}}.
+// (A "notification" payload is handled too, just in case.) Chrome requires a visible notification for every push.
+self.addEventListener('push', e => {
+  let p = {};
+  try { p = e.data ? e.data.json() : {}; } catch (err) { p = { data: { body: e.data ? e.data.text() : '' } }; }
+  const d = p.data || {}, n = p.notification || {};
+  const title = d.title || n.title || 'Odmit reminder';
+  const taskId = d.taskId || '';
+  // same tag as the in-app reminder (task id), so a push and the open app's own notification merge into one
+  const opts = { body: d.body || n.body || '', icon: './icons/icon-192.png', badge: './icons/icon-192.png',
+    tag: d.tag || taskId || 'odmit', data: { taskId }, requireInteraction: d.type === 'reminder', renotify: false };
+  e.waitUntil(self.registration.getNotifications({ tag: opts.tag }).then(open => {
+    if (open.length && d.type === 'reminder') return; // already showing (the open app notified first)
+    return self.registration.showNotification(title, opts);
+  }).then(() => self.clients.matchAll({ type: 'window', includeUncontrolled: true }))
+    .then(list => list.forEach(c => c.postMessage({ type: 'push', kind: d.type || '', taskId }))));
 });
