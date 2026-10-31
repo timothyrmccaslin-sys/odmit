@@ -56,6 +56,34 @@ svg.solid{fill:currentColor;stroke:none}
 .avatar{width:32px;height:32px;border-radius:50%;background:var(--avatar);color:var(--avatar-txt);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:12px;flex:none}
 .avatar.sm{width:24px;height:24px;font-size:10px}
 #topbar .avatar{background:#fff;color:#1a4fa8}
+#meAvatar{position:relative;cursor:pointer;border:0;padding:0;font:inherit;font-weight:600;font-size:12px}
+#meAvatar .nbadge{position:absolute;top:-4px;right:-6px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#d13438;color:#fff;font-size:10px;font-weight:700;line-height:16px;text-align:center;box-shadow:0 0 0 2px var(--topbar);box-sizing:border-box}
+/* notifications panel (tap your initials) */
+.backdrop.np-back{align-items:flex-start;justify-content:flex-end;padding:56px 12px 12px;background:rgba(0,0,0,.25)}
+.modal.npanel{max-width:400px;padding:0;display:flex;flex-direction:column;max-height:calc(100vh - 72px);overflow:hidden}
+.np-acct{display:flex;align-items:center;gap:12px;padding:16px 16px 12px;border-bottom:1px solid var(--line)}
+.np-acct .avatar{width:44px;height:44px;font-size:16px}
+.np-acct .who{flex:1;min-width:0}.np-acct .who b{display:block;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.np-acct .who small{color:var(--sub);font-size:12px}
+.np-acct .acts{display:flex;gap:2px}
+.np-icbtn{width:36px;height:36px;border-radius:4px;display:flex;align-items:center;justify-content:center;color:var(--sub)}
+.np-icbtn:hover{background:var(--hover);color:var(--txt)}.np-icbtn svg{width:20px;height:20px}
+.np-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px 6px}
+.np-head h2{margin:0;font-size:16px}
+#npList{overflow:auto;padding:0 6px 8px;flex:1}
+.np-item{display:flex;gap:10px;align-items:flex-start;width:100%;text-align:left;padding:10px;border-radius:6px;position:relative;color:var(--txt)}
+.np-item:hover{background:var(--hover)}
+.np-item.unread{background:var(--blue-l)}
+.np-item.unread::after{content:'';position:absolute;right:10px;top:16px;width:8px;height:8px;border-radius:50%;background:var(--blue)}
+.np-ic{flex:none;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--hover);color:var(--blue)}
+.np-ic svg{width:18px;height:18px}.np-ic.done{color:#92c353}
+.np-txt{flex:1;min-width:0;padding-right:14px;font-size:14px;line-height:1.35}
+.np-txt .what{overflow-wrap:anywhere}
+.np-meta{display:flex;align-items:center;gap:4px;color:var(--sub);font-size:12px;margin-top:3px;flex-wrap:wrap}
+.np-meta .li{width:16px;height:16px}.np-meta .li svg{width:14px;height:14px}
+.np-empty{text-align:center;color:var(--sub);padding:28px 16px 32px}
+.np-empty svg{width:36px;height:36px;color:var(--muted);display:block;margin:0 auto 8px}
+@media (max-width:767px){.backdrop.np-back{padding:calc(52px + env(safe-area-inset-top)) 8px 8px}.modal.npanel{max-width:none;max-height:calc(100vh - 64px - env(safe-area-inset-top))}}
 /* layout */
 #shell{display:flex}
 #sidebar{width:290px;background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column;flex:none;transition:transform .2s}
@@ -319,8 +347,8 @@ html[data-theme="light"] .tchip{color:color-mix(in srgb,var(--tc,var(--blue)) 62
     <div class="brand">Odmit</div>
     <label id="searchWrap"><svg viewBox="0 0 24 24" data-myna="search"><path d="M19 11.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0m-2.107 5.42 3.08 3.08"/></svg><input id="search" type="search" placeholder="Search" autocomplete="off"></label>
     <div id="syncChip" title="Sync status"><span class="dot"></span><span class="txt">Synced</span></div>
-    <button class="tb-btn" data-act="settings" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" data-myna="cog"><path d="M10.11 3.9a1 1 0 0 1 .995-.9h1.79a1 1 0 0 1 .995.9l.033.333a8 8 0 0 1 2.209.915l.259-.212a1 1 0 0 1 1.34.067l1.266 1.266a1 1 0 0 1 .067 1.34l-.212.26c.409.676.72 1.419.915 2.208l.332.033a1 1 0 0 1 .901.995v1.79a1 1 0 0 1-.9.995l-.333.033a8 8 0 0 1-.915 2.209l.212.259a1 1 0 0 1-.067 1.34l-1.266 1.266a1 1 0 0 1-1.34.067l-.26-.212a8 8 0 0 1-2.208.915l-.033.332a1 1 0 0 1-.995.901h-1.79a1 1 0 0 1-.995-.9l-.033-.333a8 8 0 0 1-2.209-.915l-.259.212a1 1 0 0 1-1.34-.067L5.003 17.73a1 1 0 0 1-.067-1.34l.212-.26a8 8 0 0 1-.915-2.208L3.9 13.89a1 1 0 0 1-.9-.995v-1.79a1 1 0 0 1 .9-.995l.333-.033a8 8 0 0 1 .915-2.209l-.212-.259a1 1 0 0 1 .067-1.34L6.27 5.003a1 1 0 0 1 1.34-.067l.26.212a8 8 0 0 1 2.208-.915z"/><path d="M14.5 12a2.5 2.5 0 1 0-5 0 2.5 2.5 0 0 0 5 0"/></svg></button>
-    <div class="avatar" id="meAvatar" data-act="settings" title=""></div>
+    <button class="tb-btn" id="settingsBtn" data-act="settings" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" data-myna="cog"><path d="M10.11 3.9a1 1 0 0 1 .995-.9h1.79a1 1 0 0 1 .995.9l.033.333a8 8 0 0 1 2.209.915l.259-.212a1 1 0 0 1 1.34.067l1.266 1.266a1 1 0 0 1 .067 1.34l-.212.26c.409.676.72 1.419.915 2.208l.332.033a1 1 0 0 1 .901.995v1.79a1 1 0 0 1-.9.995l-.333.033a8 8 0 0 1-.915 2.209l.212.259a1 1 0 0 1-.067 1.34l-1.266 1.266a1 1 0 0 1-1.34.067l-.26-.212a8 8 0 0 1-2.208.915l-.033.332a1 1 0 0 1-.995.901h-1.79a1 1 0 0 1-.995-.9l-.033-.333a8 8 0 0 1-2.209-.915l-.259.212a1 1 0 0 1-1.34-.067L5.003 17.73a1 1 0 0 1-.067-1.34l.212-.26a8 8 0 0 1-.915-2.208L3.9 13.89a1 1 0 0 1-.9-.995v-1.79a1 1 0 0 1 .9-.995l.333-.033a8 8 0 0 1 .915-2.209l-.212-.259a1 1 0 0 1 .067-1.34L6.27 5.003a1 1 0 0 1 1.34-.067l.26.212a8 8 0 0 1 2.208-.915z"/><path d="M14.5 12a2.5 2.5 0 1 0-5 0 2.5 2.5 0 0 0 5 0"/></svg></button>
+    <button class="avatar" id="meAvatar" data-act="account" title="" aria-label="Account and notifications"></button>
   </header>
   <div id="shell">
     <nav id="sidebar"><div id="navScroll"></div>
@@ -541,7 +569,7 @@ function loadLocal() {
 function saveLocal() { LS.set('server.' + session.userId, server); LS.set('queue.' + session.userId, queue); }
 function rebuild() {
   st = server ? JSON.parse(JSON.stringify(server)) : { me: { id: session.userId, name: session.name, prefs: {} }, users: [], lists: [], tasks: [], tags: [] };
-  st.me.prefs = st.me.prefs || {}; st.tags = st.tags || [];
+  st.me.prefs = st.me.prefs || {}; st.tags = st.tags || []; st.notifications = st.notifications || [];
   queue.forEach(op => applyLocal(st, op));
 }
 function applyLocal(s, op) {
@@ -576,6 +604,8 @@ function applyLocal(s, op) {
     case 'tag.delete': s.tags = s.tags.filter(g => g.id !== op.id); s.tasks.forEach(t => { if (t.tags) t.tags = t.tags.filter(x => x !== op.id); }); break;
     case 'prefs.set': s.me.prefs = JSON.parse(JSON.stringify(op.prefs)); break;
     case 'me.update': s.me.email = op.email; break;
+    case 'notif.read': (s.notifications || []).forEach(n => { if (!op.upTo || n.at <= op.upTo) n.read = true; }); break;
+    case 'notif.clear': s.notifications = (s.notifications || []).filter(n => op.upTo && n.at > op.upTo); break;
   }
 }
 function mutate(op) {
@@ -649,6 +679,7 @@ const V2 = () => !!(server && server.apiVersion >= 2);
 const V3 = () => !!(server && server.apiVersion >= 3); // 3 = push notifications
 const V4 = () => !!(server && server.apiVersion >= 4); // 4 = "<Name> completed a task" pushes on shared lists
 const V6 = () => !!(server && server.apiVersion >= 6); // 6 = transfer list ownership
+const V7 = () => !!(server && server.apiVersion >= 7); // 7 = notification history (Notifications tab)
 const OLD_SERVER = () => !!(server && !(server.apiVersion >= 2));
 const safeColor = c => /^#[0-9a-f]{6}$/i.test(c || '') ? c.toLowerCase() : '';
 const tagById = id => st.tags.find(g => g.id === id);
@@ -724,7 +755,11 @@ function sortTasks(arr, v) {
 /* ---------- render ---------- */
 function render() { if (!st) return; renderTop(); renderNav(); renderMain(); renderDetail(); }
 function renderTop() {
-  $('#meAvatar').textContent = initials(me().name); $('#meAvatar').title = me().name + ' – settings';
+  const un = unreadCount(), av = $('#meAvatar');
+  av.innerHTML = esc(initials(me().name)) + (un ? `<span class="nbadge" aria-hidden="true">${un > 99 ? '99+' : un}</span>` : '');
+  av.title = me().name + (un ? ` – ${un} new notification${un === 1 ? '' : 's'}` : ' – notifications');
+  av.setAttribute('aria-label', 'Account and notifications' + (un ? `, ${un} unread` : ''));
+  if ($('#npList')) renderNotifList();
   setSync(syncStatus);
 }
 function navOrder() {
@@ -1659,6 +1694,78 @@ function msImportModal() {
   }
 }
 
+async function signOutAsk() {
+  if (queue.length && !(await confirmDialog('Sign out?', queue.length + ' change(s) have not reached the server yet and will be lost.', 'Sign out anyway', true))) return;
+  closeModal(); signOut(false);
+}
+/* ---------- notification history (tap your initials) ----------
+   Kept on the server (Notifications tab, API 7) so every device shows the same list, including notifications that
+   never reached a device (push off, no device, alerts turned off). Comes with every sync; read/clear are queued changes. */
+const notifs = () => (st && st.notifications) || [];
+const unreadCount = () => V7() ? notifs().filter(n => !n.read).length : 0;
+function relTime(iso) {
+  const d = new Date(iso), s = (Date.now() - d) / 1000;
+  if (isNaN(s)) return '';
+  if (s < 60) return 'Just now';
+  if (s < 3600) return Math.floor(s / 60) + ' min ago';
+  if (ymd(d) === today()) return Math.floor(s / 3600) + ' h ago';
+  if (ymd(d) === ymd(addDays(new Date(), -1))) return 'Yesterday';
+  if (s < 6 * 86400) return d.toLocaleDateString(undefined, { weekday: 'long' });
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: d.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined });
+}
+function notifWhat(n) {
+  const t = `"${esc(n.title || 'a task')}"`;
+  if (n.type === 'completed') { const by = n.byId === me().id ? 'You' : (st.users.find(u => u.id === n.byId) || {}).name || n.byName || 'Someone';
+    return `<b>${esc(by)}</b> completed ${t}`; }
+  if (n.type === 'reminder') return `Reminder: ${t}`;
+  return esc(n.title || 'Notification');
+}
+let npSeen = new Set(); // unread when the panel opened: stays highlighted while it is open
+function renderNotifList() {
+  const box = $('#npList'); if (!box) return;
+  const all = notifs();
+  $('#npClear').disabled = !all.length || !V7();
+  if (!V7()) { box.innerHTML = `<div class="np-empty">${IC.bell}Notification history needs the server update (Code.gs version 7).</div>`; return; }
+  if (!all.length) { box.innerHTML = `<div class="np-empty">${IC.bell}<b>No notifications</b><br>Reminders and "completed" alerts from shared lists show up here, on all your devices.</div>`; return; }
+  box.innerHTML = all.map(n => {
+    const l = st.lists.find(x => x.id === n.listId);
+    const listName = l ? (l.isInbox && l.ownerId === me().id ? 'Tasks' : l.name) : n.listName;
+    const due = n.type === 'reminder' && /^Due [^·]+/.exec(n.body || '');
+    return `<button class="np-item${npSeen.has(n.id) || !n.read ? ' unread' : ''}" data-nid="${esc(n.id)}">
+      <span class="np-ic${n.type === 'completed' ? ' done' : ''}">${n.type === 'completed' ? IC.checkOn : IC.bell}</span>
+      <span class="np-txt"><span class="what">${notifWhat(n)}</span>
+        <span class="np-meta">${listName ? (l ? listIcon(l) : iconHtml(null, '', 'list')) + `<span class="ln">${esc(listName)}</span><span>·</span>` : ''}${due ? `<span>${esc(due[0].trim())}</span><span>·</span>` : ''}<time datetime="${esc(n.at)}" title="${esc(new Date(n.at).toLocaleString())}">${esc(relTime(n.at))}</time></span></span></button>`;
+  }).join('');
+  box.querySelectorAll('[data-nid]').forEach(b => b.onclick = () => {
+    const n = notifs().find(x => x.id === b.dataset.nid); if (!n) return;
+    const t = st.tasks.find(x => x.id === n.taskId), l = st.lists.find(x => x.id === n.listId);
+    if (!t && !l) return toast(n.listName ? `"${n.listName}" is no longer available to you.` : 'That task no longer exists.');
+    closeModal(); document.body.classList.remove('nav-open');
+    openTask(t ? t.id : null, n.listId);
+    if (!t) toast('That task no longer exists. Showing its list.');
+  });
+}
+function markNotifsRead() {
+  const all = notifs(); if (!V7() || !all.some(n => !n.read)) return;
+  mutate({ type: 'notif.read', upTo: all.reduce((m, n) => n.at > m ? n.at : m, '') }); // only what you have seen; newer ones stay unread
+}
+function notifPanel() {
+  npSeen = new Set(notifs().filter(n => !n.read).map(n => n.id));
+  const m = openModal(`<div class="np-acct"><span class="avatar">${esc(initials(me().name))}</span>
+      <div class="who"><b>${esc(me().name)}</b><small>Signed in as ${esc(me().name)}${me().isAdmin ? ' · admin' : ''}</small></div>
+      <div class="acts"><button class="np-icbtn" id="npSettings" title="Settings" aria-label="Settings">${IC.cog}</button><button class="np-icbtn" id="npOut" title="Sign out" aria-label="Sign out">${IC.leave}</button></div></div>
+    <div class="np-head"><h2>Notifications</h2><button class="btn link" id="npClear">Clear all</button></div>
+    <div id="npList" role="list"></div>`, () => { npSeen = new Set(); markNotifsRead(); });
+  m.classList.add('npanel'); m.id = 'npanel'; m.setAttribute('aria-label', 'Notifications'); m.parentNode.classList.add('np-back');
+  m.querySelector('#npSettings').onclick = () => { closeModal(); settingsModal(); };
+  m.querySelector('#npOut').onclick = signOutAsk;
+  m.querySelector('#npClear').onclick = () => {
+    const all = notifs(); if (!all.length || !V7()) return;
+    mutate({ type: 'notif.clear', upTo: all.reduce((x, n) => n.at > x ? n.at : x, '') }); npSeen = new Set(); renderNotifList();
+  };
+  renderNotifList(); markNotifsRead();
+  if (navigator.onLine) scheduleFlush(50); // fetch anything new
+}
 function settingsModal(extraHtml) {
   const a = server && server.admin;
   const notif = !('Notification' in window) ? 'Not supported in this browser' : Notification.permission === 'granted' ? 'On' : Notification.permission === 'denied' ? 'Blocked (allow it in site settings)' : 'Off';
@@ -1724,10 +1831,7 @@ function settingsModal(extraHtml) {
   };
   m.querySelector('#sSync').onclick = () => { flush(); toast('Syncing…'); };
   const mi = m.querySelector('#sMsImport'); if (mi) mi.onclick = msImportModal;
-  m.querySelector('#sOut').onclick = async () => {
-    if (queue.length && !(await confirmDialog('Sign out?', queue.length + ' change(s) have not reached the server yet and will be lost.', 'Sign out anyway', true))) return;
-    closeModal(); signOut(false);
-  };
+  m.querySelector('#sOut').onclick = signOutAsk;
   const ins = m.querySelector('#sInstall'); if (ins) ins.onclick = () => { installEvt.prompt(); installEvt = null; closeModal(); };
   const add = m.querySelector('#sAdd');
   if (add) {
@@ -1929,6 +2033,7 @@ document.addEventListener('click', e => {
     case 'sortClear': setPrefs(p => { delete p.sort[sortKeyFor(viewInfo())]; }); break;
     case 'listMenu': listMenu(el); break;
     case 'settings': settingsModal(); break;
+    case 'account': notifPanel(); break;
     case 'myDayOn': upd(ui.selected, { myDay: today() }); break;
     case 'myDayOff': upd(ui.selected, { myDay: '' }); break;
     case 'remindMenu': remindMenu(el); break;
