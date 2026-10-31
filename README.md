@@ -4,7 +4,7 @@ A private to-do app. This repo only holds the app files; no data, passwords or k
 
 ## Credits
 
-UI icons: [Myna UI Icons](https://mynaui.com/icons) by Praveen Juge (npm `@mynaui/icons` v0.4.11), used under the MIT License. The icons the app uses are inlined in `index.html`; the full set for the list icon picker is in `myna-icons.json` (loaded only when the picker opens).
+UI icons: [Myna UI Icons](https://mynaui.com/icons) by Praveen Juge (npm `@mynaui/icons` v0.4.11), used under the MIT License. The icons the app uses are inlined in `index.html`; the full set for the list icon picker is in `myna-icons-outline.json` and `myna-icons-solid.json` (loaded only when the picker shows that style).
 
 > MIT License
 > 

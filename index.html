@@ -366,7 +366,8 @@ const apiUrl = () => LS.get('api', '') || DEFAULT_API_URL;
  * UI icons: Myna UI Icons (outline + solid), https://mynaui.com/icons, npm @mynaui/icons v0.4.11
  * Copyright (c) Praveen Juge. MIT License: https://github.com/praveenjuge/mynaui-icons/blob/main/LICENSE
  * The UI icons Odmit uses are inlined so the app stays one offline-capable file with no CDN. The full set
- * (for the list icon picker) is in myna-icons.json, loaded only when the picker opens and cached by sw.js.
+ * (for the list icon picker) is in myna-icons-outline.json / myna-icons-solid.json, loaded only when the picker
+ * shows that style, and cached by sw.js.
  * Emoji names/groups for the picker: emoji.json, from unicode-emoji-json v0.9.0, Copyright (c) 2019 Mu-An Chiou, MIT License,
  * https://github.com/muan/unicode-emoji-json.
  *
@@ -1168,7 +1169,7 @@ async function deleteTag(id) {
 }
 
 /* ---------- list icon & color picker (any emoji or any Myna UI icon) ----------
-   The full Myna set and the emoji list are separate files (myna-icons.json, emoji.json), loaded only when the
+   The full Myna set and the emoji list are separate files (myna-icons-outline.json, myna-icons-solid.json, emoji.json), loaded only when the
    picker opens and cached by the service worker for offline use. The chosen Myna icon's path data is saved with
    the list, so the drawer never needs the big file. */
 const ASSET_BASE = 'https://timothyrmccaslin-sys.github.io/odmit/'; // public copy, used when running inside Apps Script
@@ -1202,9 +1203,10 @@ function listStyleModal(listId) {
   const grid = html => { const g = m.querySelector('#lsGrid'); if (g) { g.innerHTML = html; pressed(); } };
   async function paintIcons() {
     grid('<div class="msg">Loading icons…</div>');
-    let data; try { data = await loadAsset('myna-icons.json'); } catch (e) { return grid('<div class="msg">Couldn\'t load the icon set (are you offline?). Emoji typed below still work.</div>'); }
-    if (tab !== 'icons') return;
-    const set = data[style] || {}, terms = q.toLowerCase().split(/\s+/).filter(Boolean);
+    const want = style;
+    let data; try { data = await loadAsset(`myna-icons-${want}.json`); } catch (e) { return grid('<div class="msg">Couldn\'t load the icon set (are you offline?). Emoji typed below still work.</div>'); }
+    if (tab !== 'icons' || style !== want) return;
+    const set = data.icons || {}, terms = q.toLowerCase().split(/\s+/).filter(Boolean);
     const names = Object.keys(set).filter(n => terms.every(t => n.includes(t)));
     m.querySelector('#lsCount').textContent = names.length + ' of ' + Object.keys(set).length;
     grid(names.length ? names.map(n => `<button data-icon="${esc(n)}" title="${esc(n)}" aria-label="${esc(n)}">${mynaSvg({ name: n, style, paths: set[n] })}</button>`).join('') : `<div class="msg">No icons match "${esc(q)}"</div>`);
@@ -1242,7 +1244,7 @@ function listStyleModal(listId) {
     p.querySelector('#lsGrid').onclick = async e => {
       const b = e.target.closest('button'); if (!b) return;
       if (b.dataset.emoji) sel.icon = { type: 'emoji', value: b.dataset.emoji };
-      else if (b.dataset.icon) { const data = await loadAsset('myna-icons.json'); sel.icon = { type: 'myna', name: b.dataset.icon, style, paths: data[style][b.dataset.icon].slice() }; }
+      else if (b.dataset.icon) { const data = await loadAsset(`myna-icons-${style}.json`); sel.icon = { type: 'myna', name: b.dataset.icon, style, paths: data.icons[b.dataset.icon].slice() }; }
       prev(); pressed();
     };
     tab === 'icons' ? paintIcons() : paintEmoji();
