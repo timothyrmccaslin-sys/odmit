@@ -2,7 +2,7 @@
 // One service worker for everything: the app passes this registration to Firebase's getToken(), so no
 // firebase-messaging-sw.js is needed and no Firebase code runs here (works offline, nothing to download).
 // API calls (to script.google.com) are never cached here; the app keeps its own offline copy of your data.
-const CACHE = 'odmit-v6'; // v6: push notifications
+const CACHE = 'odmit-v7'; // v6: push notifications; v7: shared-completion alerts
 // Big picker data (full Myna UI icon set, emoji list): fetched lazily by the app, pre-cached here in the background for offline use.
 const LAZY = ['./myna-icons-outline.json', './myna-icons-solid.json', './emoji.json'];
 const SHELL = ['./', './index.html', './manifest.json', './icons/icon-192.png', './icons/icon-512.png',
@@ -30,25 +30,27 @@ self.addEventListener('fetch', e => {
 });
 self.addEventListener('notificationclick', e => {
   e.notification.close();
-  const taskId = e.notification.data && e.notification.data.taskId;
-  const url = new URL('./', self.registration.scope).href + (taskId ? '?task=' + encodeURIComponent(taskId) : '');
+  const nd = e.notification.data || {}, taskId = nd.taskId || '', listId = nd.listId || '';
+  const q = [taskId && 'task=' + encodeURIComponent(taskId), listId && 'list=' + encodeURIComponent(listId)].filter(Boolean).join('&');
+  const url = new URL('./', self.registration.scope).href + (q ? '?' + q : '');
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
-    for (const c of list) { if ('focus' in c) { c.postMessage({ type: 'open-task', taskId }); return c.focus(); } }
+    for (const c of list) { if ('focus' in c) { c.postMessage({ type: 'open-task', taskId, listId }); return c.focus(); } }
     return self.clients.openWindow(url);
   }));
 });
 
-// Push from FCM. The server sends data-only messages: {data: {type, taskId, title, body, tag}}.
+// Push from FCM. The server sends data-only messages: {data: {type, taskId, title, body, tag}}
+// type 'reminder' (sticky) | 'completed' ("<Name> completed a task", also carries listId) | 'test'.
 // (A "notification" payload is handled too, just in case.) Chrome requires a visible notification for every push.
 self.addEventListener('push', e => {
   let p = {};
   try { p = e.data ? e.data.json() : {}; } catch (err) { p = { data: { body: e.data ? e.data.text() : '' } }; }
   const d = p.data || {}, n = p.notification || {};
   const title = d.title || n.title || 'Odmit reminder';
-  const taskId = d.taskId || '';
+  const taskId = d.taskId || '', listId = d.listId || '';
   // same tag as the in-app reminder (task id), so a push and the open app's own notification merge into one
   const opts = { body: d.body || n.body || '', icon: './icons/icon-192.png', badge: './icons/icon-192.png',
-    tag: d.tag || taskId || 'odmit', data: { taskId }, requireInteraction: d.type === 'reminder', renotify: false };
+    tag: d.tag || taskId || 'odmit', data: { taskId, listId }, requireInteraction: d.type === 'reminder', renotify: false };
   e.waitUntil(self.registration.getNotifications({ tag: opts.tag }).then(open => {
     if (open.length && d.type === 'reminder') return; // already showing (the open app notified first)
     return self.registration.showNotification(title, opts);

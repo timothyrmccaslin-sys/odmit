@@ -624,6 +624,7 @@ function setPrefs(fn) { const p = JSON.parse(JSON.stringify(prefs())); fn(p); mu
 // Server feature level. Version 2 adds tags and list icon/color; an older Code.gs just doesn't know those changes.
 const V2 = () => !!(server && server.apiVersion >= 2);
 const V3 = () => !!(server && server.apiVersion >= 3); // 3 = push notifications
+const V4 = () => !!(server && server.apiVersion >= 4); // 4 = "<Name> completed a task" pushes on shared lists
 const OLD_SERVER = () => !!(server && !(server.apiVersion >= 2));
 const safeColor = c => /^#[0-9a-f]{6}$/i.test(c || '') ? c.toLowerCase() : '';
 const tagById = id => st.tags.find(g => g.id === id);
@@ -852,7 +853,7 @@ function renderDetail(force) {
     <div class="d-card"><textarea id="dNotes" placeholder="Add note" maxlength="20000">${esc(t.notes)}</textarea></div>
   </div>
   <div id="detailFoot"><button class="tb-btn" data-act="closeDetail" id="detailClose" aria-label="Close details">${matchMedia('(max-width:767px)').matches ? IC.back : IC.fwd}</button>
-    <span class="center">Created ${esc(new Date(t.createdAt).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }))}${t.createdBy && t.createdBy !== me().id ? ' by ' + esc(userName(t.createdBy)) : ''}${t.completed && t.completedAt ? '<br>Completed ' + esc(dueLabel(ymd(new Date(t.completedAt)))) : ''}</span>
+    <span class="center">Created ${esc(new Date(t.createdAt).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }))}${t.createdBy && t.createdBy !== me().id ? ' by ' + esc(userName(t.createdBy)) : ''}${t.completed && t.completedAt ? '<br>Completed ' + esc(dueLabel(ymd(new Date(t.completedAt)))) + (t.completedBy && t.completedBy !== me().id ? ' by ' + esc(userName(t.completedBy)) : '') : ''}</span>
     <button class="tb-btn" data-act="deleteTask" aria-label="Delete task" title="Delete task">${IC.trash}</button></div>`;
   autoGrow($('#dTitle'));
 }
@@ -1330,6 +1331,7 @@ function settingsModal(extraHtml) {
       ${ps ? `<p style="margin:0 0 8px" id="sPush" data-state="${ps}">When Odmit is closed: <b>${esc(PUSH_TEXT[ps])}</b><span id="sPushDevices"></span></p>` : ''}
       <div style="display:flex;gap:8px;flex-wrap:wrap">${pushOn ? '<button class="btn" id="sPushOff">Turn off on this device</button>' : '<button class="btn" id="sNotify">Turn on notifications</button>'}<button class="btn" id="sTest">Test</button>${ps && a ? '<button class="btn link" id="sPushCheck">Check server setup</button>' : ''}</div>
       <div id="sPushCheckOut" style="font-size:12px;margin-top:6px"></div>
+      ${V4() ? `<label style="display:flex;gap:8px;align-items:center;margin-top:10px;cursor:pointer"><input type="checkbox" id="sNotifyShared"${prefs().notifyShared === false ? '' : ' checked'}>Notify me when others complete shared tasks</label>` : ''}
       <div class="field" style="margin-top:12px"><label>Email reminders (optional, works even when the app is closed)</label><input id="sEmail" type="email" placeholder="you@example.com" value="${esc(me().email || '')}"></div>
       <button class="btn" id="sEmailSave">Save email</button></div>
     <div class="settings-sec"><h3>Change password</h3>
@@ -1371,6 +1373,8 @@ function settingsModal(extraHtml) {
     if (!r.thisDevice) { pushForgotten(); return; } // the server dropped this device (dead token / expired login): new token
     el.textContent = ' · ' + r.devices + (r.devices === 1 ? ' device' : ' devices');
   }).catch(() => {});
+  const ns = m.querySelector('#sNotifyShared');
+  if (ns) ns.onchange = () => { setPrefs(p => { if (ns.checked) delete p.notifyShared; else p.notifyShared = false; }); toast(ns.checked ? 'You will be notified when others complete shared tasks' : 'No more alerts when others complete shared tasks'); };
   m.querySelector('#sEmailSave').onclick = () => { mutate({ type: 'me.update', email: m.querySelector('#sEmail').value.trim() }); toast('Email saved'); };
   m.querySelector('#sPw').onclick = async () => {
     const r = await adminCall({ action: 'changePassword', oldPassword: m.querySelector('#sOld').value, newPassword: m.querySelector('#sNew').value });
@@ -1517,8 +1521,10 @@ async function pushForgotten() { // FCM said the old token is dead (or the login
   try { const { fm, m } = await withTimeout(messaging(), 8000, 'timeout'); await fm.deleteToken(m); } catch (e) {}
   return refreshPush();
 }
-function openTask(id) { const t = st && st.tasks.find(x => x.id === id); if (!t) return; ui.selected = id; if (!tasksFor(viewInfo()).includes(t)) { ui.view = listOf(t).isInbox && listOf(t).ownerId === me().id ? 'inbox' : t.listId; } render(); }
-if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => { if (!e.data) return; if (e.data.type === 'open-task') openTask(e.data.taskId); else if (e.data.type === 'push' && session) flush(); });
+function openTask(id, listId) { const t = st && st.tasks.find(x => x.id === id);
+  if (!t) { if (listId && st && st.lists.some(l => l.id === listId)) { ui.selected = null; ui.view = listId; render(); } return; } // task gone: show its list
+  ui.selected = id; if (!tasksFor(viewInfo()).includes(t)) { ui.view = listOf(t).isInbox && listOf(t).ownerId === me().id ? 'inbox' : t.listId; } render(); }
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => { if (!e.data) return; if (e.data.type === 'open-task') openTask(e.data.taskId, e.data.listId); else if (e.data.type === 'push' && session) flush(); });
 /* ---------- events ---------- */
 document.addEventListener('click', e => {
   if (dragJustEnded) { e.preventDefault(); e.stopPropagation(); return; }
@@ -1771,7 +1777,7 @@ function showApp() {
   $('#auth').classList.add('hidden'); $('#app').classList.remove('hidden');
   if (qs.get('view')) ui.view = qs.get('view');
   render(); checkReminders();
-  if (qs.get('task')) openTask(qs.get('task'));
+  if (qs.get('task') || qs.get('list')) openTask(qs.get('task'), qs.get('list'));
   setTimeout(refreshPush, 2500);
 }
 async function start() {
