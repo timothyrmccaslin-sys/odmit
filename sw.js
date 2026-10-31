@@ -1,6 +1,6 @@
 // Odmit service worker: offline app shell + notification clicks.
 // API calls (to script.google.com) are never cached here; the app keeps its own offline copy of your data.
-const CACHE = 'odmit-v3'; // v2: Myna UI icons, dark theme, tags, list icons & colors
+const CACHE = 'odmit-v4'; // v2: Myna UI icons, dark theme, tags, list icons & colors
 // Big picker data (full Myna UI icon set, emoji list): fetched lazily by the app, pre-cached here in the background for offline use.
 const LAZY = ['./myna-icons-outline.json', './myna-icons-solid.json', './emoji.json'];
 const SHELL = ['./', './index.html', './manifest.json', './icons/icon-192.png', './icons/icon-512.png',

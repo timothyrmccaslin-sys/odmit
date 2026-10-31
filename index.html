@@ -1325,7 +1325,7 @@ function settingsModal(extraHtml) {
       <p style="font-size:12px">They open Odmit, choose <i>I have an invite code</i>, and set their own password.</p></div>` : ''}
     <div class="settings-sec"><h3>This device</h3><div style="display:flex;gap:8px;flex-wrap:wrap">
       ${installEvt ? '<button class="btn" id="sInstall">Install app</button>' : ''}<button class="btn" id="sSync">Sync now</button><button class="btn danger" id="sOut">Sign out</button></div>
-      <p style="font-size:12px;margin-top:8px">${IN_GAS ? 'Running inside Google Apps Script.' : 'Server: ' + esc(apiUrl() || 'not set')}</p></div>
+      </div>
     <div class="row-end"><button class="btn primary" id="sClose">Close</button></div>`);
   m.querySelector('#sClose').onclick = closeModal;
   m.querySelectorAll('#sTheme button').forEach(b => b.onclick = () => { window.odmitTheme.set(b.dataset.theme); m.querySelectorAll('#sTheme button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); });
@@ -1598,7 +1598,7 @@ function finishDrag() {
 function authCard(mode, msg) {
   const a = $('#auth'), c = $('#authCard'); a.classList.remove('hidden'); $('#app').classList.add('hidden');
   const logo = '<div class="logo"><img src="icons/icon-192.png" alt="" onerror="this.remove()">Odmit</div>';
-  const urlLink = IN_GAS ? '' : '<button class="btn link" data-m="url">Server settings</button>';
+  const urlLink = (IN_GAS || DEFAULT_API_URL) ? '' : '<button class="btn link" data-m="url">Server settings</button>';
   if (mode === 'url') c.innerHTML = logo + `<h2>Connect to your server</h2><p>Paste the Web app URL from Apps Script (it ends in <b>/exec</b>).</p>
     <div class="field"><label for="aUrl">Server URL</label><input id="aUrl" value="${esc(apiUrl())}" placeholder="https://script.google.com/macros/s/…/exec"></div>
     <div class="err">${esc(msg || '')}</div><div class="row-end"><button class="btn primary" id="aGo">Connect</button></div>`;
@@ -1657,7 +1657,7 @@ async function start() {
   if (session) { loadLocal(); showApp(); flush(); return; }
   if (!IN_GAS && !apiUrl()) return authCard('url');
   try { const r = await rawApi({ action: 'status' }); authCard(r.needsSetup ? 'setup' : 'login'); }
-  catch (e) { authCard(IN_GAS ? 'login' : 'url', "Can't reach the server. Check the URL and your connection."); }
+  catch (e) { authCard((IN_GAS || DEFAULT_API_URL) ? 'login' : 'url', "Can't reach the server. Check your connection and try again."); }
 }
 if ('serviceWorker' in navigator && !IN_GAS && /^https?:$/.test(location.protocol)) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
