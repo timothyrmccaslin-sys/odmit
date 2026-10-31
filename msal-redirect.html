@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Cache-Control" content="no-store">
+<meta name="robots" content="noindex">
+<title>Signing in… · Odmit</title>
+<style>body{font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;align-items:center;justify-content:center;min-height:90vh;margin:0;color:#555;background:#faf9f8}@media(prefers-color-scheme:dark){body{background:#1f1f1f;color:#ccc}}</style>
+</head>
+<body>
+<p id="m">Finishing Microsoft sign-in… this window closes by itself.</p>
+<!-- Microsoft sign-in (MSAL.js v5) returns here inside the sign-in popup. This page only hands the response
+     (in the URL #fragment, never sent to any server) back to the Odmit window and closes. The bridge script is
+     served from this site on purpose (MSAL's guidance: never load the redirect bridge from a third-party CDN).
+     msal-redirect-bridge.min.js = @azure/msal-browser 5.27.0 lib/redirect-bridge/msal-redirect-bridge.min.js, MIT License, (c) Microsoft. -->
+<script src="./msal-redirect-bridge.min.js"></script>
+<script>
+(function () {
+  var m = document.getElementById('m');
+  function fail(e) { m.textContent = 'Sign-in could not be finished here. Close this window and try again from Odmit (Settings → Import from Microsoft To Do).'; if (window.console) console.error(e); }
+  try {
+    if (!window.msalRedirectBridge) return fail('bridge not loaded');
+    window.msalRedirectBridge.broadcastResponseToMainFrame().catch(fail);
+  } catch (e) { fail(e); }
+})();
+</script>
+</body>
+</html>

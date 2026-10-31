@@ -360,6 +360,12 @@ const FIREBASE_CONFIG = {
 };
 const VAPID_KEY = 'BLBej9x9WtmiX3-6MAivThRNKkohDfQHSHnFEbhhML57ZrM0TlIQtkNvXCvCUPEGC4lZNJfwG5kanlyv28lA1dI';
 const FIREBASE_SDK = 'https://www.gstatic.com/firebasejs/13.1.0/'; // loaded only when push is used
+/* =====================================================================  IMPORT FROM MICROSOFT TO DO
+   Application (client) ID of your free Microsoft Entra app registration ("Single-page application" platform).
+   Public by design, not a secret. Empty = the "Import from Microsoft To Do" button is hidden. See SETUP.md. */
+const MS_CLIENT_ID = '67948f2c-74ac-496a-a82d-883af3b63898';
+const MSAL_SDK = 'https://cdn.jsdelivr.net/npm/@azure/msal-browser@5.27.0/lib/msal-browser.min.js'; // loaded only when the import is used
+const MSAL_SRI = 'sha384-dzOMecW+tQeM+pH4bitTcEtSsfZE54pSeogsBeGqCoTt2TnO/Gkuo9xuaQdUNcNg'; // the browser refuses the file if it was changed
 /* ===================================================================== */
 
 const $ = s => document.querySelector(s);
@@ -541,7 +547,7 @@ function applyLocal(s, op) {
   const me = s.me, L = id => s.lists.find(l => l.id === id), T = id => s.tasks.find(t => t.id === id), G = id => s.tags.find(g => g.id === id);
   s.tags = s.tags || [];
   switch (op.type) {
-    case 'list.create': if (!L(op.id)) s.lists.push({ id: op.id, name: op.name, ownerId: me.id, ownerName: me.name, isInbox: false, createdAt: new Date().toISOString(), sharedWith: [] }); break;
+    case 'list.create': if (!L(op.id)) s.lists.push({ id: op.id, name: op.name, ownerId: me.id, ownerName: me.name, isInbox: false, createdAt: new Date().toISOString(), sharedWith: [], extId: op.extId || '' }); break;
     case 'list.rename': if (L(op.id)) L(op.id).name = op.name; break;
     case 'list.delete': s.lists = s.lists.filter(l => l.id !== op.id); s.tasks = s.tasks.filter(t => t.listId !== op.id); break;
     case 'list.share': {
@@ -569,12 +575,13 @@ function mutate(op) {
   queue.push(op); applyLocal(st, op); saveLocal(); render(); scheduleFlush(300);
 }
 let flushTimer = null, flushing = false, flushAgain = false;
+const FLUSH_MAX = 200; // changes per server call (it accepts up to 500); a big queue (e.g. an import) goes in several calls
 function scheduleFlush(ms) { clearTimeout(flushTimer); flushTimer = setTimeout(flush, ms); }
 async function flush() {
   if (!session) return;
   if (flushing) { flushAgain = true; return; }
   flushing = true; setSync('busy');
-  const sending = queue.slice();
+  const sending = queue.slice(0, FLUSH_MAX);
   sending.forEach(o => o.sending = true);
   try {
     const res = await rawApi(sending.length ? { action: 'batch', token: session.token, ops: sending.map(o => { const c = Object.assign({}, o); delete c.sending; return c; }) } : { action: 'sync', token: session.token });
@@ -585,7 +592,8 @@ async function flush() {
     }
     const sent = new Set(sending.map(o => o.opId));
     queue = queue.filter(o => !sent.has(o.opId));
-    (res.results || []).filter(r => !r.ok && r.code !== 'GONE').forEach(r => toast("Couldn't save a change: " + r.error));
+    const bad = (res.results || []).filter(r => !r.ok && r.code !== 'GONE');
+    if (bad.length) toast(bad.length === 1 ? "Couldn't save a change: " + bad[0].error : `Couldn't save ${bad.length} changes: ${bad[0].error}`);
     delete res.results; delete res.ok; delete res.inviteCode; delete res.invitedName;
     server = res; lastSync = Date.now();
     if (res.me) { session.name = res.me.name; LS.set('session', session); }
@@ -1319,6 +1327,286 @@ function shareModal(listId) {
 /* ---------- settings / admin ---------- */
 let installEvt = null;
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; });
+/* ---------- import from Microsoft To Do (optional: shown only when MS_CLIENT_ID is set) ----------
+   Runs entirely in the browser: Microsoft sign-in (MSAL.js, downloaded only when used) gives a read-only
+   Tasks.Read token, Microsoft Graph is read directly, and everything is written through the normal offline
+   queue (mutate), so it syncs like any other change. Each imported list/task remembers where it came from
+   (extId "mstodo:<id>", kept on the server and on this device), so running the import again adds only what's new. */
+const MS_SCOPES = ['Tasks.Read'];
+const GRAPH = 'https://graph.microsoft.com/v1.0';
+const MS_CHUNK = 150; // changes per save while importing (the server takes up to 500 per call; smaller = never near the Apps Script time limit)
+const msImportAvailable = () => !!MS_CLIENT_ID && !IN_GAS && window.isSecureContext;
+const msRedirectUri = () => new URL('msal-redirect.html', location.href.split(/[?#]/)[0]).href;
+const msMapKey = () => 'msimport.' + session.userId; // {lists: {msId: odmitId}, tasks: {msId: odmitId}}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+let msalP = null, msImporting = false;
+function loadMsal() {
+  if (!msalP) msalP = new Promise((res, rej) => {
+    if (window.msal && window.msal.PublicClientApplication) return res(window.msal);
+    const s = document.createElement('script');
+    s.src = MSAL_SDK; s.integrity = MSAL_SRI; s.crossOrigin = 'anonymous'; s.async = true;
+    s.onload = () => window.msal && window.msal.PublicClientApplication ? res(window.msal) : rej(new Error('The Microsoft sign-in library did not load.'));
+    s.onerror = () => { s.remove(); rej(new Error("Couldn't load Microsoft sign-in. Are you online?")); };
+    document.head.appendChild(s);
+  }).then(async m => {
+    const uri = msRedirectUri();
+    const pca = new m.PublicClientApplication({
+      auth: { clientId: MS_CLIENT_ID, authority: 'https://login.microsoftonline.com/common', redirectUri: uri, postLogoutRedirectUri: uri },
+      cache: { cacheLocation: 'sessionStorage' }, // the Microsoft token never outlives this tab
+      system: { popupBridgeTimeout: 180000 },     // 3 minutes to type a password / approve 2FA in the popup
+    });
+    await pca.initialize(); return pca;
+  }).catch(e => { msalP = null; throw e; });
+  return msalP;
+}
+function msErrorText(e) {
+  const code = String((e && (e.errorCode || e.graphCode)) || ''), msg = String((e && e.message) || e || ''), all = code + ' ' + msg;
+  if (code === 'user_cancelled' || /user_cancelled/.test(msg)) return 'Microsoft sign-in was cancelled. Nothing was imported.';
+  if (/popup_window_error|empty_window_error|popup_window_open_error/.test(all)) return 'Your browser blocked the Microsoft sign-in window. Allow pop-ups for this site, then try again.';
+  if (/interaction_in_progress_cancelled/.test(all)) return 'The earlier sign-in was replaced. Try again.';
+  if (/interaction_in_progress/.test(all)) return 'A Microsoft sign-in window is already open. Finish or close it, then try again.';
+  if (/timed_out|redirect_bridge_timeout/.test(all)) return "Microsoft sign-in didn't finish (the window was left open too long or couldn't talk back to Odmit). Try again.";
+  if (/AADSTS90094|AADSTS90095|AADSTS900941|AADSTS90099|admin(istrator)?[ _-]?(approval|consent)|needs? (an )?admin/i.test(all)) return "This work/school account needs its IT admin's approval before Odmit can read its tasks. Personal Microsoft accounts (Outlook.com, Hotmail, Live) work without approval. Nothing was imported.";
+  if (/access_denied|consent_required|AADSTS65004|AADSTS65001/.test(all)) return "Access wasn't granted, so Odmit can't read your Microsoft To Do tasks. Nothing was imported.";
+  if (/AADSTS50011|redirect_uri/i.test(all)) return 'The Microsoft app registration does not allow this address. Add ' + msRedirectUri() + ' as a "Single-page application" redirect URI.';
+  if (/AADSTS700016|unauthorized_client|AADSTS50194|AADSTS9002346/.test(all)) return 'The Microsoft app registration (MS_CLIENT_ID) is not set up for this kind of account. See SETUP.md "Import from Microsoft To Do".';
+  if (e && e.status === 401 || e && e.status === 403) return "Microsoft didn't allow reading your To Do tasks" + (code ? ' (' + code + ')' : '') + ". Work/school accounts need their IT admin's approval; personal Microsoft accounts work.";
+  if (/MailboxNotEnabledForRESTAPI|MailboxNotSupportedForRESTAPI/.test(all)) return 'This Microsoft account has no To Do data that can be read.';
+  return msg || 'Something went wrong talking to Microsoft.';
+}
+async function graphGet(url, token) {
+  if (!url.startsWith(GRAPH + '/')) throw new Error('Unexpected Microsoft Graph address'); // the token is only ever sent to Graph
+  for (let i = 0; ; i++) {
+    let res;
+    try { res = await fetch(url, { headers: { Authorization: 'Bearer ' + token, Prefer: 'outlook.timezone="UTC"' } }); }
+    catch (e) { if (i < 2) { await sleep(1500 * (i + 1)); continue; } throw new Error("Couldn't reach Microsoft. Are you online?"); }
+    if ((res.status === 429 || res.status >= 500) && i < 4) { await sleep(Math.min(30, Number(res.headers.get('Retry-After')) || 2 ** (i + 1)) * 1000); continue; }
+    let body = null; try { body = await res.json(); } catch (e) { /* empty */ }
+    if (!res.ok) {
+      const ge = (body && body.error) || {}, err = new Error('Microsoft Graph: ' + (ge.message || 'HTTP ' + res.status));
+      err.status = res.status; err.graphCode = ge.code || ''; throw err;
+    }
+    return body || {};
+  }
+}
+async function graphAll(url, token) { // follows @odata.nextLink paging
+  const out = [];
+  for (let n = 0; url && n < 1000; n++) { const b = await graphGet(url, token); (b.value || []).forEach(v => out.push(v)); url = b['@odata.nextLink'] || ''; }
+  return out;
+}
+async function msListTasks(listId, token) {
+  const base = GRAPH + '/me/todo/lists/' + encodeURIComponent(listId) + '/tasks';
+  try { return await graphAll(base + '?$expand=checklistItems', token); }
+  catch (e) {
+    if (e.status !== 400 && e.status !== 501) throw e;
+    const tasks = await graphAll(base, token); // $expand not accepted: steps one task at a time
+    for (let i = 0; i < tasks.length; i += 4) await Promise.all(tasks.slice(i, i + 4).map(async t => {
+      t.checklistItems = await graphAll(base + '/' + encodeURIComponent(t.id) + '/checklistItems', token).catch(() => []);
+    }));
+    return tasks;
+  }
+}
+// ---- mapping Microsoft To Do -> Odmit (pure functions)
+const MS_UTC = /^(utc|etc\/utc|gmt|z|coordinated universal time)$/i;
+const msTrim = s => String(s || '').replace(/(\.\d{3})\d+/, '$1');
+const msIso = s => { const t = Date.parse(msTrim(s)); return s && !isNaN(t) ? new Date(t).toISOString() : ''; };
+function msTime(o) { // dateTimeTimeZone -> ms
+  if (!o || !o.dateTime) return NaN;
+  const s = msTrim(o.dateTime).replace(/Z$/, '');
+  return MS_UTC.test(o.timeZone || 'UTC') ? Date.parse(s + 'Z') : Date.parse(s);
+}
+function msDue(o) { // To Do keeps a due *date* as midnight in your time zone, sent as UTC: +12 h lands on the right day anywhere
+  if (!o || !o.dateTime) return '';
+  if (!MS_UTC.test(o.timeZone || 'UTC')) return /^\d{4}-\d{2}-\d{2}/.test(o.dateTime) ? o.dateTime.slice(0, 10) : '';
+  const t = msTime(o); return isNaN(t) ? '' : new Date(t + 12 * 3600000).toISOString().slice(0, 10);
+}
+const MS_DOW = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
+function msRepeat(rec, due) { // -> {repeat, approx}: approx = no exact Odmit equivalent (e.g. "2nd Tuesday")
+  const p = rec && rec.pattern; if (!p || !p.type) return { repeat: null, approx: false };
+  const n = Math.max(1, Math.min(999, Math.floor(Number(p.interval) || 1)));
+  const every = (type, unit, extra) => n === 1 && type ? { type } : Object.assign({ type: 'custom', interval: n, unit }, extra || {});
+  switch (p.type) {
+    case 'daily': return { repeat: every('daily', 'day'), approx: false };
+    case 'weekly': {
+      const days = [...new Set((p.daysOfWeek || []).map(d => MS_DOW[String(d).toLowerCase()]).filter(d => d >= 0))].sort((a, b) => a - b);
+      const dueDow = due ? new Date(due + 'T12:00:00').getDay() : -1;
+      if (n === 1 && days.join() === '1,2,3,4,5') return { repeat: { type: 'weekdays' }, approx: false };
+      if (!days.length || (days.length === 1 && days[0] === dueDow)) return { repeat: every('weekly', 'week'), approx: false };
+      return { repeat: { type: 'custom', interval: n, unit: 'week', days }, approx: false };
+    }
+    case 'absoluteMonthly': return { repeat: every('monthly', 'month'), approx: false };
+    case 'relativeMonthly': return { repeat: every('monthly', 'month'), approx: true };
+    case 'absoluteYearly': return { repeat: every('yearly', 'year'), approx: false };
+    case 'relativeYearly': return { repeat: every('yearly', 'year'), approx: true };
+  }
+  return { repeat: null, approx: true };
+}
+function msNotes(body) {
+  let s = String((body && body.content) || '');
+  if (body && String(body.contentType).toLowerCase() === 'html') {
+    s = s.replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|li|h[1-6]|tr)>/gi, '\n');
+    const doc = new DOMParser().parseFromString(s, 'text/html'); // parsed inert: nothing runs or loads
+    doc.querySelectorAll('script,style,head').forEach(e => e.remove());
+    s = doc.body ? doc.body.textContent || '' : '';
+  }
+  return s.replace(/\r\n?/g, '\n').replace(/\u00a0/g, ' ').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, 20000);
+}
+const MS_EMOJI_HEAD = /^((?:\p{Extended_Pictographic}|\p{Regional_Indicator})(?:\uFE0F|\u20E3|\p{Emoji_Modifier}|\p{Regional_Indicator}|\u200D\p{Extended_Pictographic})*)\s*/u;
+function msListName(name) { // To Do shows a leading emoji as the list icon: do the same
+  name = String(name || '').trim(); const m = name.match(MS_EMOJI_HEAD), rest = m ? name.slice(m[0].length).trim() : '';
+  return m && rest && m[1].length <= 32 ? { name: rest.slice(0, 60), emoji: m[1] } : { name: name.slice(0, 60) || 'Untitled list', emoji: '' };
+}
+function msKnown(map) { // what's already in Odmit (server extIds + this device's map), so nothing is imported twice
+  const lists = {}, tasks = {}, mine = l => l.ownerId === me().id;
+  st.lists.forEach(l => { if (mine(l) && /^mstodo:/.test(l.extId || '')) lists[l.extId.slice(7)] = l.id; });
+  Object.keys(map.lists).forEach(k => { const l = st.lists.find(x => x.id === map.lists[k]); if (l && mine(l) && !lists[k]) lists[k] = l.id; });
+  const ids = new Set(st.tasks.map(t => t.id));
+  st.tasks.forEach(t => { if (/^mstodo:/.test(t.extId || '')) tasks[t.extId.slice(7)] = t.id; });
+  Object.keys(map.tasks).forEach(k => { if (ids.has(map.tasks[k]) && !tasks[k]) tasks[k] = map.tasks[k]; });
+  return { lists, tasks };
+}
+function msBuildOps(picked, map) { // picked: [{list, tasks}] -> {ops, stats}; also fills map
+  const known = msKnown(map), ops = [], stats = { lists: 0, newLists: 0, tasks: 0, skipped: 0, steps: 0, approx: 0, tagsDropped: 0 };
+  const tagBy = {}; st.tags.forEach(g => tagBy[g.name.toLowerCase()] = g.id);
+  let tagCount = st.tags.length;
+  const tagId = name => {
+    name = cleanTagName(name); if (!name) return '';
+    const k = name.toLowerCase(); if (tagBy[k]) return tagBy[k];
+    if (tagCount >= 200) { stats.tagsDropped++; return ''; }
+    const id = uid('tg_'); tagBy[k] = id; tagCount++; ops.push({ type: 'tag.create', id, name, color: '' }); return id;
+  };
+  picked.forEach(({ list, tasks }) => {
+    stats.lists++;
+    let lid = list.wellknownListName === 'defaultList' ? (inbox() || {}).id : known.lists[list.id];
+    if (!lid) {
+      const nm = msListName(list.displayName);
+      lid = uid('l_'); stats.newLists++;
+      ops.push({ type: 'list.create', id: lid, name: nm.name, extId: 'mstodo:' + list.id });
+      if (nm.emoji && V2()) ops.push({ type: 'list.style', id: lid, icon: { type: 'emoji', value: nm.emoji }, color: '' });
+    }
+    map.lists[list.id] = lid;
+    const fresh = tasks.filter(t => { if (known.tasks[t.id]) { stats.skipped++; return false; } return true; })
+      .sort((a, b) => (Date.parse(msTrim(a.createdDateTime)) || 0) - (Date.parse(msTrim(b.createdDateTime)) || 0));
+    const base = Math.min(0, ...st.tasks.filter(t => t.listId === lid).map(t => Number(t.order) || 0));
+    fresh.forEach((t, i) => {
+      const done = t.status === 'completed', due = msDue(t.dueDateTime);
+      const rem = msTime(t.reminderDateTime), fin = msTime(t.completedDateTime), rp = done ? { repeat: null, approx: false } : msRepeat(t.recurrence, due);
+      if (rp.approx && rp.repeat) stats.approx++;
+      const steps = (t.checklistItems || []).slice(0, 200).map(c => ({ id: uid('s'), title: String(c.displayName || '').slice(0, 500), done: !!c.isChecked }));
+      stats.steps += steps.length;
+      const task = { id: uid('t_'), listId: lid, title: String(t.title || '').trim().slice(0, 500) || 'Untitled task',
+        completed: done, completedAt: done ? (!isNaN(fin) ? new Date(fin).toISOString() : msIso(t.lastModifiedDateTime) || new Date().toISOString()) : '',
+        important: t.importance === 'high', dueDate: due,
+        reminderAt: !done && t.isReminderOn && rem > Date.now() ? new Date(rem).toISOString() : '',
+        repeat: rp.repeat, notes: msNotes(t.body), steps, order: base - 1000 * (i + 1),
+        createdAt: msIso(t.createdDateTime) || new Date().toISOString(), extId: 'mstodo:' + t.id };
+      if (V2()) { const tags = [...new Set((t.categories || []).map(tagId).filter(Boolean))].slice(0, 30); if (tags.length) task.tags = tags; }
+      ops.push({ type: 'task.create', task });
+      map.tasks[t.id] = task.id; stats.tasks++;
+    });
+  });
+  return { ops, stats };
+}
+function mutateMany(ops) { // many changes, one save + one render (imports)
+  ops.forEach(op => { op.opId = uid('op'); queue.push(op); applyLocal(st, op); });
+  saveLocal(); render();
+}
+async function msSave(ops, progress) { // in chunks, waiting for each to reach the server: true = all synced
+  for (let i = 0; i < ops.length; i += MS_CHUNK) {
+    const chunk = ops.slice(i, i + MS_CHUNK), ids = new Set();
+    mutateMany(chunk); chunk.forEach(o => ids.add(o.opId));
+    progress(Math.min(ops.length, i + MS_CHUNK));
+    flush();
+    const end = Date.now() + 120000;
+    while (queue.some(o => ids.has(o.opId))) {
+      if (!flushing && (syncStatus === 'off' || syncStatus === 'err')) { mutateMany(ops.slice(i + MS_CHUNK)); return false; }
+      if (Date.now() > end) { mutateMany(ops.slice(i + MS_CHUNK)); return false; }
+      await sleep(200);
+    }
+  }
+  return true;
+}
+function msImportModal() {
+  if (!msImportAvailable()) return;
+  let token = '', who = '', lists = [], closed = false, attempt = 0;
+  const m = openModal(`<h2>Import from Microsoft To Do</h2>
+    <p>Copies your Microsoft To Do lists and tasks into Odmit as your own lists (private to you until you share them). Odmit only asks to <b>read</b> your tasks and changes nothing in Microsoft To Do.</p>
+    <div id="msBody"><button class="btn primary" id="msSignIn">Sign in with Microsoft</button></div>
+    <p id="msStatus" role="status" aria-live="polite" style="margin:12px 0 0"></p>
+    <div class="row-end" id="msBtns"><button class="btn" id="msClose">Close</button></div>`, () => { closed = true; });
+  m.classList.add('wide');
+  const $m = s => m.querySelector(s), status = (t, bad) => { const e = $m('#msStatus'); if (e) { e.textContent = t; e.style.color = bad ? 'var(--red)' : ''; } };
+  $m('#msClose').onclick = closeModal;
+  loadMsal().catch(() => {}); // start downloading now so the popup opens straight from the click
+  $m('#msSignIn').onclick = async () => {
+    // Since MSAL v5 a closed sign-in window can't be noticed right away (it only times out), so "Try again"
+    // stays available and simply replaces the pending sign-in (overrideInteractionInProgress).
+    const b = $m('#msSignIn'), my = ++attempt; status('Opening Microsoft sign-in…');
+    try {
+      const pca = await loadMsal();
+      if (my !== attempt || closed) return;
+      b.textContent = 'Try again';
+      status('Finish signing in to Microsoft in the pop-up window. Closed it by mistake, or Microsoft said "Need admin approval"? Click "Try again" (work/school accounts need their IT admin\'s approval; personal Microsoft accounts work).');
+      const r = await pca.loginPopup({ scopes: MS_SCOPES, prompt: 'select_account', overrideInteractionInProgress: true });
+      if (my !== attempt || closed) return;
+      token = r.accessToken; who = (r.account && (r.account.username || r.account.name)) || '';
+      b.disabled = true; status('Reading your lists…');
+      lists = await graphAll(GRAPH + '/me/todo/lists', token);
+      if (!closed && my === attempt) picker();
+    } catch (e) { if (!closed && my === attempt) { status(msErrorText(e), true); b.disabled = false; } }
+  };
+  function picker() {
+    const known = msKnown(LS.get(msMapKey(), { lists: {}, tasks: {} }));
+    const note = l => l.wellknownListName === 'flaggedEmails' ? 'Flagged email - not imported' : l.wellknownListName === 'defaultList' ? 'added to your Odmit "Tasks" list' : known.lists[l.id] ? 'imported before - only new tasks are added' : '';
+    $m('#msBody').innerHTML = `<p style="margin:0 0 8px">${who ? 'Signed in as <b>' + esc(who) + '</b>. ' : ''}Choose the lists to import:</p>
+      <div id="msLists" style="max-height:46vh;overflow:auto;border:1px solid var(--line);border-radius:6px;padding:4px 10px">${lists.map((l, i) => {
+        const skip = l.wellknownListName === 'flaggedEmails';
+        return `<label style="display:flex;gap:10px;align-items:center;padding:7px 0;cursor:${skip ? 'default' : 'pointer'};${skip ? 'opacity:.6' : ''}"><input type="checkbox" data-i="${i}"${skip ? ' disabled data-flag="1"' : ' checked'}>
+          <span style="flex:1;min-width:0"><span class="msName">${esc(l.displayName || 'Untitled list')}</span>${note(l) ? `<br><small style="color:var(--sub)">${esc(note(l))}</small>` : ''}</span></label>`;
+      }).join('') || '<p>No lists found in Microsoft To Do.</p>'}</div>
+      <button class="btn link" id="msAll" style="margin-top:6px">Select none</button>`;
+    $m('#msBtns').innerHTML = '<button class="btn" id="msCancel">Cancel</button><button class="btn primary" id="msGo">Import</button>';
+    const boxes = () => [...m.querySelectorAll('#msLists input:not([disabled])')];
+    const sync = () => { const n = boxes().filter(x => x.checked).length; $m('#msGo').disabled = !n; $m('#msAll').textContent = n === boxes().length ? 'Select none' : 'Select all'; };
+    boxes().forEach(x => x.onchange = sync); sync();
+    $m('#msAll').onclick = () => { const on = $m('#msAll').textContent === 'Select all'; boxes().forEach(x => x.checked = on); sync(); };
+    $m('#msCancel').onclick = closeModal;
+    $m('#msGo').onclick = () => run(boxes().filter(x => x.checked).map(x => lists[+x.dataset.i]));
+    status('');
+  }
+  async function run(sel) {
+    if (msImporting) return status('An import is already running.', true);
+    msImporting = true;
+    m.querySelectorAll('#msBody input, #msBody button, #msBtns button').forEach(x => x.disabled = true);
+    try {
+      const picked = [];
+      for (let i = 0; i < sel.length; i++) {
+        status(`Importing ${i + 1} of ${sel.length} lists… (${sel[i].displayName || 'Untitled list'})`);
+        picked.push({ list: sel[i], tasks: await msListTasks(sel[i].id, token) });
+      }
+      const map = LS.get(msMapKey(), { lists: {}, tasks: {} });
+      const { ops, stats } = msBuildOps(picked, map);
+      const synced = await msSave(ops, n => status(`Saving… ${n} of ${ops.length} changes`));
+      LS.set(msMapKey(), map);
+      const skippedFlagged = lists.some(l => l.wellknownListName === 'flaggedEmails');
+      const lines = [`Imported ${stats.lists} ${stats.lists === 1 ? 'list' : 'lists'}, ${stats.tasks} ${stats.tasks === 1 ? 'task' : 'tasks'}.`];
+      if (stats.skipped) lines.push(`${stats.skipped} ${stats.skipped === 1 ? 'task was' : 'tasks were'} already imported and left as they are.`);
+      if (stats.steps) lines.push(`${stats.steps} steps included.`);
+      if (stats.approx) lines.push(`${stats.approx} repeating ${stats.approx === 1 ? 'task uses' : 'tasks use'} the closest Odmit repeat (e.g. "every month" for "2nd Tuesday").`);
+      if (stats.tagsDropped) lines.push('Some categories were not added as tags (200 tag limit).');
+      if (skippedFlagged) lines.push('Flagged email was not imported.');
+      if (!synced) lines.push("Everything is saved on this device and will sync when Odmit can reach the server.");
+      if (!closed) {
+        $m('#msBody').innerHTML = `<div id="msSummary">${lines.map(l => `<p style="margin:0 0 6px">${esc(l)}</p>`).join('')}</div>`;
+        $m('#msBtns').innerHTML = '<button class="btn primary" id="msDone">Done</button>'; $m('#msDone').onclick = closeModal; status('');
+      } else toast(lines[0]);
+    } catch (e) {
+      if (!closed) { status(msErrorText(e) + ' Nothing more was imported; you can run the import again.', true); m.querySelectorAll('#msBody input:not([data-flag]), #msBody button, #msBtns button').forEach(x => x.disabled = false); }
+      else toast('Microsoft To Do import stopped: ' + msErrorText(e));
+    } finally { msImporting = false; }
+  }
+}
+
 function settingsModal(extraHtml) {
   const a = server && server.admin;
   const notif = !('Notification' in window) ? 'Not supported in this browser' : Notification.permission === 'granted' ? 'On' : Notification.permission === 'denied' ? 'Blocked (allow it in site settings)' : 'Off';
@@ -1342,6 +1630,8 @@ function settingsModal(extraHtml) {
         <td style="text-align:right;white-space:nowrap">${u.id === me().id ? '' : `<button class="btn link" data-reset="${esc(u.id)}">Reset password</button><button class="btn link" style="color:var(--red)" data-remove="${esc(u.id)}">Remove</button>`}</td></tr>`).join('')}</table>
       <div style="display:flex;gap:8px;margin-top:10px"><input id="sNewUser" placeholder="New person's name" maxlength="60" style="flex:1;height:32px;padding:0 8px;border:1px solid var(--border2);border-radius:4px;background:var(--field);color:var(--txt)"><button class="btn primary" id="sAdd">Add person</button></div>
       <p style="font-size:12px">They open Odmit, choose <i>I have an invite code</i>, and set their own password.</p></div>` : ''}
+    ${msImportAvailable() ? `<div class="settings-sec"><h3>Import</h3><p style="margin:0 0 8px">Copy your lists and tasks from Microsoft To Do. Running it again only adds what's new.</p>
+      <button class="btn" id="sMsImport">Import from Microsoft To Do</button></div>` : ''}
     <div class="settings-sec"><h3>This device</h3><div style="display:flex;gap:8px;flex-wrap:wrap">
       ${installEvt ? '<button class="btn" id="sInstall">Install app</button>' : ''}<button class="btn" id="sSync">Sync now</button><button class="btn danger" id="sOut">Sign out</button></div>
       </div>
@@ -1381,6 +1671,7 @@ function settingsModal(extraHtml) {
     if (r) { toast('Password changed. Other devices were signed out.'); m.querySelector('#sOld').value = m.querySelector('#sNew').value = ''; }
   };
   m.querySelector('#sSync').onclick = () => { flush(); toast('Syncing…'); };
+  const mi = m.querySelector('#sMsImport'); if (mi) mi.onclick = msImportModal;
   m.querySelector('#sOut').onclick = async () => {
     if (queue.length && !(await confirmDialog('Sign out?', queue.length + ' change(s) have not reached the server yet and will be lost.', 'Sign out anyway', true))) return;
     closeModal(); signOut(false);

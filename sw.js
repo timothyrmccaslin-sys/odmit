@@ -2,7 +2,7 @@
 // One service worker for everything: the app passes this registration to Firebase's getToken(), so no
 // firebase-messaging-sw.js is needed and no Firebase code runs here (works offline, nothing to download).
 // API calls (to script.google.com) are never cached here; the app keeps its own offline copy of your data.
-const CACHE = 'odmit-v7'; // v6: push notifications; v7: shared-completion alerts
+const CACHE = 'odmit-v8'; // v6: push notifications; v7: shared-completion alerts; v8: Microsoft To Do import
 // Big picker data (full Myna UI icon set, emoji list): fetched lazily by the app, pre-cached here in the background for offline use.
 const LAZY = ['./myna-icons-outline.json', './myna-icons-solid.json', './emoji.json'];
 const SHELL = ['./', './index.html', './manifest.json', './icons/icon-192.png', './icons/icon-512.png',
@@ -17,8 +17,13 @@ self.addEventListener('activate', e => {
 });
 self.addEventListener('fetch', e => {
   const req = e.request;
-  if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return; // API etc: straight to network
+  const url = new URL(req.url);
+  if (req.method !== 'GET' || url.origin !== self.location.origin) return; // API etc: straight to network
+  // Microsoft sign-in lands on msal-redirect.html with the sign-in response in its URL: never cache or answer it here.
+  if (/\/msal-redirect(\.html|-bridge\.min\.js)$/.test(url.pathname)) return;
   if (req.mode === 'navigate') { // network first, so updates arrive; cached page when offline
+    const scope = new URL(self.registration.scope).pathname;
+    if (url.pathname !== scope && url.pathname !== scope + 'index.html') return; // some other page: not the app shell
     e.respondWith(fetch(req, { cache: 'no-cache' }).then(res => { const copy = res.clone(); caches.open(CACHE).then(c => c.put('./index.html', copy)); return res; })
       .catch(() => caches.match('./index.html').then(r => r || caches.match('./'))));
     return;
