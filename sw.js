@@ -2,11 +2,12 @@
 // One service worker for everything: the app passes this registration to Firebase's getToken(), so no
 // firebase-messaging-sw.js is needed and no Firebase code runs here (works offline, nothing to download).
 // API calls (to script.google.com) are never cached here; the app keeps its own offline copy of your data.
-const CACHE = 'odmit-v9'; // v6: push notifications; v7: shared-completion alerts; v8: Microsoft To Do import; v9: transfer list ownership
+const CACHE = 'odmit-v10'; // v6: push notifications; v7: shared-completion alerts; v8: Microsoft To Do import; v9: transfer list ownership; v10: new app icon
 // Big picker data (full Myna UI icon set, emoji list): fetched lazily by the app, pre-cached here in the background for offline use.
 const LAZY = ['./myna-icons-outline.json', './myna-icons-solid.json', './emoji.json'];
 const SHELL = ['./', './index.html', './manifest.json', './icons/icon-192.png', './icons/icon-512.png',
-  './icons/icon-maskable-512.png', './icons/apple-touch-icon.png', './icons/favicon-32.png'];
+  './icons/icon-maskable-512.png', './icons/icon-maskable-192.png', './icons/apple-touch-icon.png', './icons/favicon-32.png',
+  './icons/favicon-16.png', './icons/badge-96.png', './favicon.ico'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL).then(() => { c.addAll(LAZY).catch(() => {}); })).then(() => self.skipWaiting()));
@@ -54,7 +55,7 @@ self.addEventListener('push', e => {
   const title = d.title || n.title || 'Odmit reminder';
   const taskId = d.taskId || '', listId = d.listId || '';
   // same tag as the in-app reminder (task id), so a push and the open app's own notification merge into one
-  const opts = { body: d.body || n.body || '', icon: './icons/icon-192.png', badge: './icons/icon-192.png',
+  const opts = { body: d.body || n.body || '', icon: './icons/icon-192.png', badge: './icons/badge-96.png',
     tag: d.tag || taskId || 'odmit', data: { taskId, listId }, requireInteraction: d.type === 'reminder', renotify: false };
   e.waitUntil(self.registration.getNotifications({ tag: opts.tag }).then(open => {
     if (open.length && d.type === 'reminder') return; // already showing (the open app notified first)
