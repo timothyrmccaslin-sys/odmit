@@ -1878,7 +1878,7 @@ function settingsModal(extraHtml) {
   const so = m.querySelector('#sPushOff');
   if (so) so.onclick = async () => { so.disabled = true; await disablePush(true); toast('Push turned off on this device'); if ($('#sClose')) settingsModal(); };
   m.querySelector('#sTest').onclick = async () => {
-    if (!pushOn) return notify('Odmit test', 'Notifications are working.', null);
+    if (!pushOn) return notify('Notifications are working.', null);
     try { const r = await rawApi({ action: 'push.test', token: session.token, deviceId: deviceId() });
       toast(r.ok ? 'Test sent. It should arrive in a few seconds, even with Odmit closed.' : 'Push test failed: ' + r.error);
     } catch (e) { toast('You need to be online for that.'); }
@@ -1970,10 +1970,10 @@ async function askNotify(explicit) {
   if (Notification.permission === 'default') { try { await Notification.requestPermission(); } catch (e) {} }
   else if (explicit && Notification.permission === 'denied') toast('Notifications are blocked. Allow them in the browser\'s site settings.');
 }
-async function notify(title, body, taskId) {
-  toast('🔔 ' + title, taskId ? { label: 'Open', fn: () => openTask(taskId) } : null, 'reminder', 15000);
+async function notify(message, taskId) { // every system notification reads "Odmit" / <message> (short, key words first: fits a watch)
+  toast('🔔 ' + message, taskId ? { label: 'Open', fn: () => openTask(taskId) } : null, 'reminder', 15000);
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
-  const opts = { body, icon: 'icons/icon-192.png', badge: 'icons/badge-96.png', tag: taskId || 'test', data: { taskId }, requireInteraction: true };
+  const title = 'Odmit', opts = { body: message, icon: 'icons/icon-192.png', badge: 'icons/badge-96.png', tag: taskId || 'test', data: { taskId }, requireInteraction: true };
   try { // Android Chrome only allows notifications through the service worker
     const reg = navigator.serviceWorker && await Promise.race([navigator.serviceWorker.getRegistration(), new Promise(r => setTimeout(r, 1000))]);
     if (reg) return reg.showNotification(title, opts);
@@ -1988,7 +1988,7 @@ function checkReminders() {
     const at = Date.parse(t.reminderAt), key = t.id + '@' + t.reminderAt;
     if (at <= now && !done[key]) {
       done[key] = now;
-      if (now - at < 24 * 3600e3) notify(t.title, (t.dueDate ? 'Due ' + dueLabel(t.dueDate) + ' · ' : '') + (listOf(t) || {}).name, t.id);
+      if (now - at < 24 * 3600e3) notify('Reminder: ' + t.title, t.id);
     }
   });
   Object.keys(done).forEach(k => { if (now - done[k] > 30 * 864e5) delete done[k]; });

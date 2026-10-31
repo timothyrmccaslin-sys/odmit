@@ -2,7 +2,7 @@
   "name": "Odmit",
   "short_name": "Odmit",
   "description": "Private to-do lists for you and a few people you choose.",
-  "id": "./",
+  "id": "/odmit/",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
