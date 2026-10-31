@@ -135,6 +135,25 @@ svg.solid{fill:currentColor;stroke:none}
 .sec-head.collapsed .chev{transform:rotate(-90deg)}
 .sec-head .cnt{color:var(--sub);font-weight:400}
 .sec-head.overdue{color:var(--red)}
+/* search results: Groups -> Lists -> Tasks */
+mark{background:#fff1a8;color:inherit;border-radius:2px;padding:0 1px}
+html[data-theme="dark"] mark{background:rgba(255,214,0,.3);color:#fff}
+.sr-sec{display:flex;align-items:center;gap:8px;margin:18px 2px 8px;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--sub)}
+.sr-sec:first-child{margin-top:4px}.sr-sec .cnt{font-weight:400}
+.sr-group{margin-bottom:14px}
+.sr-ghead{display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:8px;border-radius:10px;cursor:pointer;font-weight:600;font-size:15px;color:var(--txt);background:var(--card)}
+.sr-ghead:hover{background:var(--card-h)}.sr-ghead>svg:first-child{width:20px;height:20px;color:var(--blue)}
+.sr-ghead .name,.sr-head .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sr-ghead .cnt,.sr-head .cnt{color:var(--sub);font-weight:400;font-size:13px}
+.sr-ghead>svg:last-child,.sr-head>svg:last-child{width:16px;height:16px;color:var(--sub)}
+.sr-group .sr-list{margin-left:14px}
+.sr-head{display:flex;align-items:center;gap:10px;padding:10px 14px;min-height:44px;cursor:pointer;font-weight:600;font-size:14px;border-bottom:1px solid var(--line)}
+.sr-head:hover{background:var(--row-h)}.sr-head .li{width:20px;height:20px}.sr-head .li svg{width:18px;height:18px}
+.sr-head .shared-ic svg{width:14px;height:14px;color:var(--sub)}
+.sr-list .sec-head.sr-done{margin:0;padding:10px 14px;font-size:13px;border-top:1px solid var(--line)}
+.sr-none{padding:12px 14px;color:var(--sub);font-size:13px}
+.task .meta .li{width:14px;height:14px;display:inline-flex}.task .meta .li svg{width:13px;height:13px}.task .meta .li .emo{font-size:12px}
+.nav-group.active{color:var(--blue)}
 .task{display:flex;align-items:center;gap:12px;background:var(--row);box-shadow:var(--shadow);border-radius:4px;min-height:52px;padding:6px 12px;margin-bottom:2px;cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:pan-y}
 .task:hover{background:var(--row-h)}
 .task.selected{background:var(--sel)}
@@ -717,15 +736,17 @@ function viewInfo() {
   if (s) return Object.assign({ kind: 'smart', list: s.id === 'inbox' ? inbox() : null }, s);
   const l = st.lists.find(x => x.id === ui.view);
   if (l) return { kind: 'list', id: l.id, name: l.name, list: l };
+  if (String(ui.view).startsWith('group:')) { const g = (prefs().groups || []).find(x => 'group:' + x.id === ui.view); if (g) return { kind: 'group', id: ui.view, gid: g.id, name: g.name, icon: 'folder', group: g }; }
   if (String(ui.view).startsWith('tag:')) { const g = tagById(ui.view.slice(4)); if (g) return { kind: 'tag', id: ui.view, tagId: g.id, name: '#' + g.name, icon: 'tag', tag: g }; }
   ui.view = 'myday'; return viewInfo();
 }
 function tasksFor(v) {
   const t = today(), all = st.tasks;
   if (v.kind === 'search') {
-    const q = ui.search.toLowerCase();
-    return all.filter(x => (x.title + ' ' + x.notes + ' ' + (x.steps || []).map(s => s.title).join(' ') + ' ' + tagsOf(x).map(g => '#' + g.name).join(' ')).toLowerCase().includes(q));
+    const r = searchResults(ui.search);
+    return r.groups.flatMap(it => it.lists).concat(r.lists).flatMap(l => all.filter(x => x.listId === l.id)).concat(r.tasks);
   }
+  if (v.kind === 'group') { const ids = new Set(groupLists(v.gid).map(l => l.id)); return all.filter(x => ids.has(x.listId)); }
   if (v.kind === 'tag') return all.filter(x => (x.tags || []).includes(v.tagId));
   switch (v.id) {
     case 'myday': return all.filter(x => x.myDay === t);
@@ -735,6 +756,58 @@ function tasksFor(v) {
     case 'inbox': return all.filter(x => x.listId === (inbox() || {}).id);
   }
   return all.filter(x => x.listId === v.id);
+}
+/* ---------- search: groups (your sidebar folders) -> lists -> tasks; case-insensitive, partial, trimmed; local cache only ---------- */
+const norm = s => String(s == null ? '' : s).toLocaleLowerCase();
+const listLabel = l => l.isInbox && l.ownerId === me().id ? 'Tasks' : l.name;
+function hl(text, q) { // escape + <mark> every case-insensitive occurrence of q
+  text = String(text == null ? '' : text); q = String(q || '').trim();
+  if (!q) return esc(text);
+  const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'giu'); let out = '', last = 0, m;
+  while ((m = re.exec(text)) && m[0].length) { out += esc(text.slice(last, m.index)) + '<mark>' + esc(m[0]) + '</mark>'; last = m.index + m[0].length; }
+  return out + esc(text.slice(last));
+}
+function taskText(x) { return norm([x.title, x.notes, (x.steps || []).map(s => s.title).join(' '), tagsOf(x).map(g => '#' + g.name).join(' ')].join(' ')); }
+function groupLists(gid) { const it = navOrder().find(i => i.type === 'group' && i.g.id === gid); return it ? it.lists : []; }
+function searchResults(raw) {
+  const q = norm(String(raw || '').trim()), no = navOrder();
+  if (!q) return { groups: [], lists: [], tasks: [] };
+  const groups = no.filter(it => it.type === 'group' && norm(it.g.name).includes(q));
+  const shown = new Set(); groups.forEach(it => it.lists.forEach(l => shown.add(l.id)));
+  const ordered = [inbox()].filter(Boolean).concat(no.flatMap(it => it.type === 'group' ? it.lists : [it.l]));
+  const lists = ordered.filter(l => !shown.has(l.id) && norm(listLabel(l)).includes(q));
+  lists.forEach(l => shown.add(l.id));
+  const tasks = st.tasks.filter(t => !shown.has(t.listId) && taskText(t).includes(q));
+  return { groups, lists, tasks };
+}
+const byDoneAt = (a, b) => (b.completedAt || '').localeCompare(a.completedAt || '');
+function doneSub(key, done, v) { // completed tasks: a collapsed "Completed" part (tap to show)
+  if (!done.length) return '';
+  const openD = !!ui.collapsed[key];
+  return `<div class="sec-head sr-done${openD ? '' : ' collapsed'}" data-act="collapse" data-key="${esc(key)}">${IC.chev}Completed <span class="cnt">${done.length}</span></div>` + (openD ? done.map(t => taskRow(t, v)).join('') : '');
+}
+function listBlock(l, q) {
+  const v = { kind: 'list', id: l.id, hl: q }, ts = sortTasks(st.tasks.filter(t => t.listId === l.id), { kind: 'list', id: l.id });
+  const open = ts.filter(t => !t.completed), done = ts.filter(t => t.completed).sort(byDoneAt);
+  return `<div class="tcard sr-list" data-lid="${esc(l.id)}"><div class="sr-head" data-act="nav" data-id="${esc(l.id)}" role="button" aria-label="Open list ${esc(listLabel(l))}">${listIcon(l)}<span class="name">${hl(listLabel(l), q)}</span>`
+    + (isShared(l) ? `<span class="shared-ic" title="Shared list">${IC.people}</span>` : '') + `<span class="cnt">${open.length || ''}</span>${IC.chevR}</div>`
+    + open.map(t => taskRow(t, v)).join('') + doneSub('sdone:' + l.id, done, v) + (ts.length ? '' : '<div class="sr-none">No tasks</div>') + '</div>';
+}
+function groupBlock(g, lists, q) {
+  return `<div class="sr-group" data-gid="${esc(g.id)}"><div class="sr-ghead" data-act="nav" data-id="group:${esc(g.id)}" role="button" aria-label="Open group ${esc(g.name)}">${IC.folder}<span class="name">${hl(g.name, q)}</span><span class="cnt">${lists.length} list${lists.length === 1 ? '' : 's'}</span>${IC.chevR}</div>`
+    + (lists.length ? lists.map(l => listBlock(l, q)).join('') : '<div class="tcard"><div class="sr-none">No lists in this group</div></div>') + '</div>';
+}
+function searchHtml(v) {
+  const q = ui.search, r = searchResults(q), sec = (name, n) => `<div class="sr-sec" role="heading" aria-level="2">${name} <span class="cnt">${n}</span></div>`;
+  let h = '';
+  if (r.groups.length) h += sec('Groups', r.groups.length) + r.groups.map(it => groupBlock(it.g, it.lists, q)).join('');
+  if (r.lists.length) h += sec('Lists', r.lists.length) + r.lists.map(l => listBlock(l, q)).join('');
+  if (r.tasks.length) {
+    const ts = sortTasks(r.tasks.slice(), v), open = ts.filter(t => !t.completed), done = ts.filter(t => t.completed).sort(byDoneAt), tv = { kind: 'search', hl: q };
+    h += sec('Tasks', r.tasks.length) + '<div class="tcard sr-list sr-tasks">' + open.map(t => taskRow(t, tv)).join('') + doneSub('sdone:__tasks', done, tv) + '</div>';
+  }
+  if (!h) h = `<div class="empty">${IC.search}<p>No results for "${esc(q)}"</p><p style="font-size:13px">Search looks at group and list names, and at task titles, notes, steps and #tags.</p></div>`;
+  return { h, r };
 }
 const SORTS = { importance: 'Importance', dueDate: 'Due date', alpha: 'Alphabetically', created: 'Creation date' };
 function sortKeyFor(v) { return v.kind === 'search' ? 'search' : (v.id || ui.view); }
@@ -793,7 +866,7 @@ function renderNav() {
     if (it.type === 'list') h += navItem(it.l.id, it.l.name, listIcon(it.l), countFor({ id: it.l.id }), `data-drag="list" data-lid="${esc(it.l.id)}"` + (isShared(it.l) ? ' data-shared="1"' : ''));
     else {
       const c = !!ui.groupCollapsed[it.g.id];
-      h += `<div class="nav-group${c ? ' collapsed' : ''}" data-act="groupToggle" data-gid="${esc(it.g.id)}" data-drop="group:${esc(it.g.id)}" data-drag="group" data-lid="${esc(it.g.id)}">${IC.chev}<span class="name">${esc(it.g.name)}</span>`
+      h += `<div class="nav-group${c ? ' collapsed' : ''}${!ui.search && ui.view === 'group:' + it.g.id ? ' active' : ''}" data-act="groupToggle" data-gid="${esc(it.g.id)}" data-drop="group:${esc(it.g.id)}" data-drag="group" data-lid="${esc(it.g.id)}">${IC.chev}<span class="name">${esc(it.g.name)}</span>`
         + `<button class="head-btn" data-act="groupMenu" data-gid="${esc(it.g.id)}" aria-label="Group options" style="height:28px;padding:0 4px">${IC.edit}</button></div>`;
       if (!c) h += '<div class="nav-group-items">' + (it.lists.length ? it.lists.map(l => navItem(l.id, l.name, listIcon(l), countFor({ id: l.id }), `data-drag="list" data-lid="${esc(l.id)}"` + (isShared(l) ? ' data-shared="1"' : ''))).join('')
         : '<div class="nav-item" style="color:var(--sub);cursor:default;font-size:12px" data-drop="group:' + esc(it.g.id) + '">Drag lists here</div>') + '</div>';
@@ -803,7 +876,7 @@ function renderNav() {
 }
 function taskRow(t, v) {
   const l = listOf(t), meta = [];
-  if (v.kind !== 'list' && !(v.id === 'inbox')) meta.push(`<span>${esc(l ? (l.isInbox && l.ownerId === me().id ? 'Tasks' : l.name) : '')}</span>`);
+  if (v.kind !== 'list' && !(v.id === 'inbox')) meta.push(v.kind === 'search' && l ? `<span class="lname">${listIcon(l)}${hl(listLabel(l), v.hl)}</span>` : `<span>${esc(l ? (l.isInbox && l.ownerId === me().id ? 'Tasks' : l.name) : '')}</span>`);
   if (t.myDay === today() && v.id !== 'myday') meta.push(`<span>${IC.sun}My Day</span>`);
   if (t.steps && t.steps.length) meta.push(`<span>${t.steps.filter(s => s.done).length} of ${t.steps.length}</span>`);
   if (t.reminderAt && !t.completed) meta.push(`<span>${IC.bell}${esc(timeLabel(t.reminderAt))}</span>`);
@@ -811,7 +884,7 @@ function taskRow(t, v) {
   if (t.assignedTo) meta.push(`<span class="avatar sm" title="Assigned to ${esc(userName(t.assignedTo))}">${esc(initials(userName(t.assignedTo)))}</span>`);
   return `<div class="task${t.completed ? ' done' : ''}${ui.selected === t.id ? ' selected' : ''}" data-act="open" data-id="${esc(t.id)}" data-drag="task" data-tid="${esc(t.id)}">
     <button class="circle${t.completed ? ' on' : ''}" data-act="toggle" data-id="${esc(t.id)}" aria-label="${t.completed ? 'Mark as not completed' : 'Mark as completed'}">${IC.check}${IC.checkOn}</button>
-    <div class="body"><div class="title">${esc(t.title)}</div>${meta.length ? '<div class="meta">' + meta.join('') + '</div>' : ''}</div>
+    <div class="body"><div class="title">${v.hl ? hl(t.title, v.hl) : esc(t.title)}</div>${meta.length ? '<div class="meta">' + meta.join('') + '</div>' : ''}</div>
     ${rowRight(t)}
     <button class="star${t.important ? ' on' : ''}" data-act="star" data-id="${esc(t.id)}" aria-label="${t.important ? 'Remove importance' : 'Mark as important'}">${IC.star}${IC.starOn}</button></div>`;
 }
@@ -837,7 +910,7 @@ function renderMain() {
   document.title = v.name + ' – Odmit';
   const tint = v.kind === 'list' ? safeColor(v.list.color) : v.kind === 'tag' ? safeColor(v.tag.color) : '';
   setTint($('#main'), tint);
-  $('#viewIcon').innerHTML = v.kind === 'list' && (v.list.icon || v.list.color) ? listIcon(v.list) : v.kind === 'tag' ? tagIcon(v.tag) : '';
+  $('#viewIcon').innerHTML = v.kind === 'list' && (v.list.icon || v.list.color) ? listIcon(v.list) : v.kind === 'tag' ? tagIcon(v.tag) : v.kind === 'group' ? iconHtml(null, '', 'folder') : '';
   const sub = [];
   if (v.id === 'myday') sub.push(esc(new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })));
   if (v.kind === 'list' && v.list.ownerId !== me().id) sub.push(`<span class="chip">${IC.people}Shared by ${esc(v.list.ownerName)}</span>`);
@@ -848,19 +921,21 @@ function renderMain() {
   $('#shareBtn').classList.toggle('hidden', v.kind !== 'list');
   $('#shareBtn').querySelector('.t').textContent = v.kind === 'list' && !owner ? 'Members' : 'Share';
   $('#moreBtn').classList.toggle('hidden', v.kind !== 'list' && v.kind !== 'tag');
-  $('#sortBtn').classList.toggle('hidden', v.id === 'planned');
-  $('#addBox').classList.toggle('hidden', v.id === 'assigned' || v.kind === 'search');
-  $('#fab').classList.toggle('hidden', v.id === 'assigned' || v.kind === 'search');
+  $('#sortBtn').classList.toggle('hidden', v.id === 'planned' || v.kind === 'group');
+  $('#addBox').classList.toggle('hidden', v.id === 'assigned' || v.kind === 'search' || v.kind === 'group');
+  $('#fab').classList.toggle('hidden', v.id === 'assigned' || v.kind === 'search' || v.kind === 'group');
   $('#addInput').placeholder = v.id === 'planned' ? 'Add a task due today' : v.kind === 'tag' ? 'Add a task tagged ' + v.name : V2() ? 'Add a task  (#tag to tag it)' : 'Add a task';
 
   const tasks = sortTasks(tasksFor(v), v);
   const open = tasks.filter(t => !t.completed), done = tasks.filter(t => t.completed).sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || ''));
   let h = '';
   if (v.kind === 'search') {
-    const byList = {};
-    tasks.forEach(t => (byList[t.listId] = byList[t.listId] || []).push(t));
-    h = Object.keys(byList).map(id => { const l = st.lists.find(x => x.id === id); return section('s:' + id, l ? l.name : '?', byList[id], v); }).join('');
-    if (!tasks.length) h = `<div class="empty">${IC.list}<p>No tasks match "${esc(ui.search)}"</p></div>`;
+    const res = searchHtml(v), r = res.r; h = res.h;
+    const n = (k, w) => k ? `${k} ${w}${k === 1 ? '' : 's'}` : '';
+    $('#viewSub').innerHTML = [n(r.groups.length, 'group'), n(r.lists.length, 'list'), n(r.tasks.length, 'task')].filter(Boolean).map(x => `<span class="chip">${x}</span>`).join('') + $('#viewSub').innerHTML;
+  } else if (v.kind === 'group') {
+    const ls = groupLists(v.gid);
+    h = ls.length ? ls.map(l => listBlock(l, '')).join('') : `<div class="empty">${IC.folder}<p>No lists in this group yet. Drag lists onto it in the sidebar.</p></div>`;
   } else if (v.id === 'planned') {
     const t = today(), tm = tomorrow();
     h = section('p:od', 'Overdue', open.filter(x => x.dueDate < t), v, 'overdue') + section('p:td', 'Today', open.filter(x => x.dueDate === t), v)
@@ -996,6 +1071,7 @@ async function leaveList(id) {
 }
 function moveListToGroup(lid, gid) { setPrefs(p => { p.listGroup = p.listGroup || {}; if (gid) p.listGroup[lid] = gid; else delete p.listGroup[lid]; }); }
 function go(view) {
+  if (String(view).startsWith('group:') && ui.groupCollapsed[view.slice(6)]) { delete ui.groupCollapsed[view.slice(6)]; LS.set('gcollapsed', ui.groupCollapsed); }
   ui.view = view; ui.search = ''; $('#search').value = ''; ui.selected = null; LS.set('view', view);
   document.body.classList.remove('nav-open'); render(); $('#taskArea').scrollTop = 0;
 }
@@ -2062,7 +2138,7 @@ document.addEventListener('keydown', e => {
 document.addEventListener('input', e => {
   if (!st) return;
   if (e.target.id === 'addInput') $('#addBtn').classList.toggle('hidden', !e.target.value.trim());
-  if (e.target.id === 'search') { ui.search = e.target.value.trim(); ui.selected = null; renderMain(); renderNav(); renderDetail(); }
+  if (e.target.id === 'search') { ui.search = e.target.value.trim(); ui.selected = null; document.body.classList.remove('nav-open'); renderMain(); renderNav(); renderDetail(); $('#taskArea').scrollTop = 0; }
   if (e.target.id === 'dTitle') autoGrow(e.target);
 });
 document.addEventListener('focusout', e => {
