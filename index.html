@@ -557,6 +557,14 @@ function applyLocal(s, op) {
       if (!op.shared) s.tasks.forEach(t => { if (t.listId === l.id && t.assignedTo === op.userId) t.assignedTo = ''; });
       break;
     }
+    case 'list.transfer': { // new owner gets full rights; the old owner stays on as a shared member
+      const l = L(op.id); if (!l || l.ownerId === op.userId) break;
+      const old = l.ownerId, u = (s.users || []).find(x => x.id === op.userId);
+      l.sharedWith = (l.sharedWith || []).filter(x => x !== op.userId && x !== old).concat([old]);
+      l.ownerId = op.userId; l.ownerName = u ? u.name : (op.userName || '?'); l.extId = '';
+      if (old === me.id) l.sharedAt = new Date().toISOString();
+      break;
+    }
     case 'task.create': if (!T(op.task.id)) s.tasks.push(Object.assign({ completed: false, completedAt: '', important: false, dueDate: '', myDay: '', reminderAt: '',
       repeat: null, assignedTo: '', notes: '', steps: [], createdBy: me.id, createdAt: new Date().toISOString() }, op.task)); break;
     case 'task.update': { const t = T(op.id); if (t) Object.assign(t, JSON.parse(JSON.stringify(op.patch))); break; }
@@ -592,7 +600,13 @@ async function flush() {
     }
     const sent = new Set(sending.map(o => o.opId));
     queue = queue.filter(o => !sent.has(o.opId));
-    const bad = (res.results || []).filter(r => !r.ok && r.code !== 'GONE');
+    const byOp = {}; sending.forEach(o => byOp[o.opId] = o);
+    const isTr = r => byOp[r.opId] && byOp[r.opId].type === 'list.transfer';
+    (res.results || []).filter(r => !r.ok && isTr(r)).forEach(b => { // a transfer queued offline was refused: say so (it is undone by the server state below)
+      const o = byOp[b.opId], l = (res.lists || []).find(x => x.id === o.id) || st.lists.find(x => x.id === o.id);
+      toast(`Couldn't make ${o.userName || 'them'} the owner of "${l ? l.name : 'the list'}": ${b.error}. ${l ? 'It is still owned by ' + (l.ownerId === session.userId ? 'you' : l.ownerName) + '.' : ''}`, null, 'err', 8000);
+    });
+    const bad = (res.results || []).filter(r => !r.ok && r.code !== 'GONE' && !isTr(r));
     if (bad.length) toast(bad.length === 1 ? "Couldn't save a change: " + bad[0].error : `Couldn't save ${bad.length} changes: ${bad[0].error}`);
     delete res.results; delete res.ok; delete res.inviteCode; delete res.invitedName;
     server = res; lastSync = Date.now();
@@ -633,6 +647,7 @@ function setPrefs(fn) { const p = JSON.parse(JSON.stringify(prefs())); fn(p); mu
 const V2 = () => !!(server && server.apiVersion >= 2);
 const V3 = () => !!(server && server.apiVersion >= 3); // 3 = push notifications
 const V4 = () => !!(server && server.apiVersion >= 4); // 4 = "<Name> completed a task" pushes on shared lists
+const V6 = () => !!(server && server.apiVersion >= 6); // 6 = transfer list ownership
 const OLD_SERVER = () => !!(server && !(server.apiVersion >= 2));
 const safeColor = c => /^#[0-9a-f]{6}$/i.test(c || '') ? c.toLowerCase() : '';
 const tagById = id => st.tags.find(g => g.id === id);
@@ -1086,6 +1101,7 @@ function listMenu(anchor) {
   if (owner) items.push({ label: 'Rename list', icon: 'edit', fn: () => { const el = $('#viewTitle'); el.focus(); el.select(); } });
   if (owner) items.push({ label: 'Icon & color…', icon: 'swatches', attr: { 'data-mi': 'style' }, fn: () => V2() ? listStyleModal(l.id) : toast('Server needs update: redeploy Code.gs to use list icons and colors') });
   items.push({ label: owner ? 'Share list' : 'Members', icon: 'people', fn: () => shareModal(l.id) });
+  if (owner && !l.isInbox && V6()) items.push({ label: 'Transfer ownership…', icon: 'user', attr: { 'data-mi': 'transfer' }, fn: () => transferModal(l.id) });
   items.push({ label: 'Sort by', icon: 'list', fn: () => sortMenu(anchor) });
   if (groups.length) { items.push('-', { head: 'Move to group' }); groups.forEach(g => items.push({ label: g.name, icon: 'folder', checked: cg === g.id, fn: () => moveListToGroup(l.id, g.id) })); if (cg) items.push({ label: 'No group', fn: () => moveListToGroup(l.id, null) }); }
   items.push('-');
@@ -1308,7 +1324,7 @@ function shareModal(listId) {
     body = `<h2>Share "${esc(l.name)}"</h2><p>Tick the people who should see this list. They can view, add, edit and complete its tasks. Only you can share, rename or delete it.</p>
       <div id="shareUsers">${others.length ? others.map(u => `<label class="share-user"><input type="checkbox" data-uid="${esc(u.id)}"${l.sharedWith.includes(u.id) ? ' checked' : ''}><span class="avatar sm">${esc(initials(u.name))}</span><span class="nm">${esc(u.name)}</span><span class="tag">${l.sharedWith.includes(u.id) ? 'Can edit' : ''}</span></label>`).join('')
         : '<p>There is nobody else yet. The admin can add people in Settings.</p>'}</div>
-      <div class="row-end"><button class="btn primary" data-x="close">Done</button></div>`;
+      <div class="row-end">${!l.isInbox && V6() ? '<button class="btn" id="shTransfer" style="margin-right:auto">Transfer ownership…</button>' : ''}<button class="btn primary" data-x="close">Done</button></div>`;
   } else {
     body = `<h2>${esc(l.name)}</h2><p>${IC.people.replace('<svg', '<svg style="width:16px;vertical-align:-3px"')} Shared with you by <b>${esc(l.ownerName)}</b>${l.sharedAt ? ' on ' + esc(new Date(l.sharedAt).toLocaleDateString()) : ''}. You can view and edit its tasks. Only ${esc(l.ownerName)} can share, rename or delete it.</p>
       <div><div class="share-user"><span class="avatar sm">${esc(initials(l.ownerName))}</span><span class="nm">${esc(l.ownerName)}</span><span class="tag">Owner</span></div>
@@ -1322,6 +1338,41 @@ function shareModal(listId) {
   });
   m.querySelector('[data-x="close"]').onclick = closeModal;
   const lv = m.querySelector('[data-x="leave"]'); if (lv) lv.onclick = () => leaveList(l.id);
+  const tr = m.querySelector('#shTransfer'); if (tr) tr.onclick = () => transferModal(l.id);
+}
+/* ---------- transfer list ownership ----------
+   The owner (or the admin, for anyone's list) picks another person who has joined. The server checks it again;
+   the old owner stays on the list as a shared member. Owner path = normal offline queue; admin path = online call. */
+function transferPicker(title, intro, users, ownerId) {
+  return new Promise(res => {
+    let done = false; const fin = v => { if (!done) { done = true; res(v); } };
+    const cand = users.filter(u => u.id !== ownerId);
+    const m = openModal(`<h2>${esc(title)}</h2><p>${intro}</p>
+      <div id="trUsers">${cand.length ? cand.map(u => `<label class="share-user"><input type="radio" name="trTo" value="${esc(u.id)}"${u.pending ? ' disabled' : ''}><span class="avatar sm">${esc(initials(u.name))}</span><span class="nm">${esc(u.name)}</span><span class="tag">${u.pending ? 'invite pending' : ''}</span></label>`).join('')
+        : '<p>There is nobody else yet. The admin can add people in Settings.</p>'}</div>
+      <div class="row-end"><button class="btn" data-x="0">Cancel</button><button class="btn primary" id="trNext" disabled>Continue</button></div>`, () => fin(null));
+    m.querySelectorAll('input[name=trTo]').forEach(i => i.onchange = () => { m.querySelector('#trNext').disabled = false; });
+    m.querySelector('[data-x="0"]').onclick = () => { fin(null); closeModal(); };
+    m.querySelector('#trNext').onclick = () => { const i = m.querySelector('input[name=trTo]:checked'); fin(i ? cand.find(u => u.id === i.value) : null); closeModal(); };
+  });
+}
+async function transferModal(listId) {
+  const l = st.lists.find(x => x.id === listId); if (!l || l.ownerId !== me().id || l.isInbox) return;
+  const u = await transferPicker('Transfer ownership', `Choose the new owner of "<b>${esc(l.name)}</b>". They get full owner rights (rename, delete, icon and color, sharing).`, st.users, l.ownerId);
+  if (!u) return;
+  if (!(await confirmDialog('Transfer ownership?', `Make ${u.name} the owner of "${l.name}"? You'll stay on the list as a shared member.`, 'Make ' + u.name + ' the owner'))) return;
+  mutate({ type: 'list.transfer', id: l.id, userId: u.id, userName: u.name });
+  toast(`${u.name} is now the owner of "${l.name}"`);
+}
+async function adminTransfer(listId, listName, fromName, users) { // admin: any list, needs a connection
+  const u = await transferPicker('Transfer "' + listName + '"', `Owned by <b>${esc(fromName)}</b>. Choose the new owner.`, users.filter(x => x.name !== fromName), '');
+  if (!u) return false;
+  if (!(await confirmDialog('Transfer ownership?', `Make ${u.name} the owner of "${listName}"? ${fromName} will stay on the list as a shared member.`, 'Make ' + u.name + ' the owner'))) return false;
+  const r = await adminCall({ action: 'batch', ops: [{ opId: uid('op'), type: 'list.transfer', id: listId, userId: u.id }] });
+  const res = r && r.results && r.results[0];
+  if (res && !res.ok) { toast(`Couldn't transfer "${listName}": ${res.error}`, null, 'err', 8000); return false; }
+  if (res) toast(`${u.name} is now the owner of "${listName}"`);
+  return !!res;
 }
 
 /* ---------- settings / admin ---------- */
@@ -1627,7 +1678,7 @@ function settingsModal(extraHtml) {
       <div class="field"><input id="sNew" type="password" placeholder="New password (6+ characters)" autocomplete="new-password"></div>
       <button class="btn" id="sPw">Change password</button></div>
     ${a ? `<div class="settings-sec"><h3>People (admin)</h3><table class="users">${a.users.map(u => `<tr><td><b>${esc(u.name)}</b>${u.isAdmin ? ' · admin' : ''}${u.pending ? `<br><small>Invite code: <span class="code" style="font-size:12px;padding:1px 6px">${esc(u.inviteCode)}</span></small>` : ''}</td>
-        <td style="text-align:right;white-space:nowrap">${u.id === me().id ? '' : `<button class="btn link" data-reset="${esc(u.id)}">Reset password</button><button class="btn link" style="color:var(--red)" data-remove="${esc(u.id)}">Remove</button>`}</td></tr>`).join('')}</table>
+        <td style="text-align:right;white-space:nowrap">${u.id === me().id ? '' : `${V6() && (u.lists || []).length ? `<button class="btn link" data-ulists="${esc(u.id)}">Lists (${u.lists.length})</button>` : ''}<button class="btn link" data-reset="${esc(u.id)}">Reset password</button><button class="btn link" style="color:var(--red)" data-remove="${esc(u.id)}">Remove</button>`}</td></tr>`).join('')}</table>
       <div style="display:flex;gap:8px;margin-top:10px"><input id="sNewUser" placeholder="New person's name" maxlength="60" style="flex:1;height:32px;padding:0 8px;border:1px solid var(--border2);border-radius:4px;background:var(--field);color:var(--txt)"><button class="btn primary" id="sAdd">Add person</button></div>
       <p style="font-size:12px">They open Odmit, choose <i>I have an invite code</i>, and set their own password.</p></div>` : ''}
     ${msImportAvailable() ? `<div class="settings-sec"><h3>Import</h3><p style="margin:0 0 8px">Copy your lists and tasks from Microsoft To Do. Running it again only adds what's new.</p>
@@ -1688,8 +1739,35 @@ function settingsModal(extraHtml) {
     });
     m.querySelectorAll('[data-remove]').forEach(b => b.onclick = async () => {
       const u = a.users.find(x => x.id === b.dataset.remove);
-      if (await confirmDialog('Remove ' + u.name + '?', `This deletes ${u.name}'s account and all lists they own. Lists they were shared into stay.`, 'Remove', true)) { await adminCall({ action: 'removeUser', userId: u.id }); }
-      settingsModal();
+      const owned = V6() ? u.lists || [] : [];
+      if (!owned.length) {
+        if (await confirmDialog('Remove ' + u.name + '?', `This deletes ${u.name}'s account and all lists they own. Lists they were shared into stay.`, 'Remove', true)) { await adminCall({ action: 'removeUser', userId: u.id }); }
+        return settingsModal();
+      }
+      const heirs = a.users.filter(x => x.id !== u.id && !x.pending);
+      const d = openModal(`<h2>Remove ${esc(u.name)}?</h2><p>This deletes ${esc(u.name)}'s account and their personal Tasks list. Lists they were shared into stay.</p>
+        <div class="field"><label for="rmTo">Their ${owned.length} list${owned.length === 1 ? '' : 's'} (${owned.map(l => esc(l.name)).join(', ')})</label>
+        <select id="rmTo"><option value="">Delete them with their tasks</option>${heirs.map(x => `<option value="${esc(x.id)}">Give them to ${esc(x.name)}${x.id === me().id ? ' (me)' : ''}</option>`).join('')}</select></div>
+        <div class="row-end"><button class="btn" data-x="0">Cancel</button><button class="btn danger" data-x="1">Remove</button></div>`, () => settingsModal());
+      d.querySelector('[data-x="0"]').onclick = closeModal;
+      d.querySelector('[data-x="1"]').onclick = async () => {
+        const to = d.querySelector('#rmTo').value, b2 = d.querySelector('[data-x="1"]'); b2.disabled = true;
+        const r = await adminCall(Object.assign({ action: 'removeUser', userId: u.id }, to ? { transferTo: to } : {}));
+        if (r && to) toast(`${u.name} was removed; their lists now belong to ${(heirs.find(x => x.id === to) || {}).name}`);
+        closeModal();
+      };
+    });
+    m.querySelectorAll('[data-ulists]').forEach(b => b.onclick = () => {
+      const u = a.users.find(x => x.id === b.dataset.ulists), active = a.users.filter(x => !x.pending);
+      const d = openModal(`<h2>${esc(u.name)}'s lists</h2><p>As admin you can give any of these lists to someone else (for example when ${esc(u.name)} leaves). ${esc(u.name)} stays on it as a shared member.</p>
+        <div>${u.lists.map(l => `<div class="share-user"><span class="nm">${esc(l.name)}</span><button class="btn" data-tl="${esc(l.id)}">Transfer…</button></div>`).join('')}</div>
+        <div class="row-end"><button class="btn primary" data-x="close">Done</button></div>`, () => settingsModal());
+      d.querySelector('[data-x="close"]').onclick = closeModal;
+      d.querySelectorAll('[data-tl]').forEach(x => x.onclick = async () => {
+        const l = u.lists.find(y => y.id === x.dataset.tl);
+        await adminTransfer(l.id, l.name, u.name, active);
+        settingsModal();
+      });
     });
   }
 }
@@ -1700,7 +1778,7 @@ async function adminCall(body) { // needs a connection
   try {
     const r = await rawApi(Object.assign({ token: session.token }, body));
     if (!r.ok) { toast(r.error); if (r.code === 'AUTH') signOut(true); return null; }
-    if (r.lists) { const keep = Object.assign({}, r); delete keep.ok; delete keep.inviteCode; delete keep.invitedName; server = keep; rebuild(); saveLocal(); render(); }
+    if (r.lists) { const keep = Object.assign({}, r); delete keep.ok; delete keep.inviteCode; delete keep.invitedName; delete keep.results; server = keep; rebuild(); saveLocal(); render(); }
     return r;
   } catch (e) { toast('You need to be online for that.'); return null; }
 }
